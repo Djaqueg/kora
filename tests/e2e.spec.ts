@@ -1,8 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import JSZip from 'jszip';
+
+const shots = join(process.cwd(), 'test-results', 'ui');
+mkdirSync(shots, { recursive: true });
 
 async function openLibrary(page: Page) {
   await page.goto('./');
@@ -97,10 +100,14 @@ test.describe('escritorio', () => {
 
     await page.getByRole('button', { name: /Semillas de atención/ }).click();
     await expect(page.getByRole('heading', { name: 'Semillas de atención' })).toBeVisible();
+    await expect(page.getByText('Por: Clara Vidal')).toBeVisible();
     await expect(page.getByText(/Resumen ejecutivo/)).toBeVisible();
     await expect(page.getByText(/jardín que se cultiva con límites/)).toBeVisible();
-    await page.getByRole('button', { name: 'Leer' }).click();
+    await page.getByTestId('book-sheet').screenshot({ path: join(shots, 'desktop-book-detail.png') });
+    await page.getByRole('button', { name: 'Leer', exact: true }).click();
     await expect(page.getByTestId('reader-body')).toContainText('atención');
+    await expect(page.getByTestId('page-label')).toContainText(/Página \d+/);
+    await expect(page.locator('p.drop-cap')).toBeVisible();
     await expect(page.locator('.hl').first()).toBeVisible();
 
     await page.evaluate(() => {
@@ -128,6 +135,24 @@ test.describe('escritorio', () => {
     await page.getByTestId('selection-toolbar').getByRole('button', { name: 'Flashcard' }).click();
     await expect(page.getByText('Flashcard creada.')).toBeVisible();
 
+    await page.getByRole('button', { name: /^Capítulo \d+$/ }).click();
+    await expect(page.getByTestId('reader-sheet')).toBeVisible();
+    await expect(page.getByText('Tamaño de texto')).toBeVisible();
+    await expect(page.getByText('Desplazamiento', { exact: true })).toBeVisible();
+    await expect(page.getByRole('switch', { name: 'Desplazamiento' })).toHaveAttribute('aria-checked', 'true');
+    await page.getByLabel('Capítulos').selectOption({ index: 0 });
+    await page.getByTestId('reader-overlay').click({ position: { x: 24, y: 24 } });
+    await expect(page.getByRole('heading', { name: 'Capítulo 1' })).toBeVisible();
+    await expect(page.locator('p.drop-cap')).toBeVisible();
+    await page.screenshot({ path: join(shots, 'desktop-reader.png') });
+    await page.getByRole('button', { name: /^Capítulo \d+$/ }).click();
+    await expect(page.getByTestId('reader-sheet')).toBeVisible();
+    await page.screenshot({ path: join(shots, 'desktop-reader-sheet.png') });
+    await page.getByRole('switch', { name: 'Desplazamiento' }).click();
+    await expect(page.getByTestId('reader-scroll')).toHaveClass(/mode-page/);
+    await page.getByRole('switch', { name: 'Desplazamiento' }).click();
+    await expect(page.getByTestId('reader-scroll')).toHaveClass(/mode-scroll/);
+    await page.getByRole('button', { name: 'Texto grande' }).click();
     await page.getByRole('button', { name: 'Escuchar capítulo' }).click();
     await expect(page.getByTestId('audio-bar')).toBeVisible();
     await page.getByRole('button', { name: 'Cerrar audio' }).click();
@@ -194,18 +219,18 @@ test.describe('escritorio', () => {
     await expect(page.getByRole('button', { name: /pagina kora/ })).toBeVisible();
 
     await page.getByRole('button', { name: /EPUB de prueba/ }).click();
-    await page.getByRole('button', { name: 'Leer' }).click();
+    await page.getByRole('button', { name: 'Leer', exact: true }).click();
     await expect(page.getByTestId('reader-body')).toContainText('Puente de prueba del epub');
 
     await page.getByRole('button', { name: 'Biblioteca' }).click();
     await page.getByRole('button', { name: /pagina kora/ }).click();
-    await page.getByRole('button', { name: 'Leer' }).click();
+    await page.getByRole('button', { name: 'Leer', exact: true }).click();
     await expect(page.getByTestId('reader-body')).toContainText('Hola Kora PDF');
     await expect(page.locator('.pdf-stage canvas')).toBeVisible();
 
     await page.getByRole('button', { name: 'Biblioteca' }).click();
     await page.getByRole('button', { name: /notas sueltas/ }).click();
-    await page.getByRole('button', { name: 'Leer' }).click();
+    await page.getByRole('button', { name: 'Leer', exact: true }).click();
     await expect(page.getByTestId('reader-body')).toContainText('Frase unica del archivo de texto');
   });
 });
@@ -219,6 +244,7 @@ test.describe('móvil', () => {
     await expect(page.getByTestId('sidebar')).toBeHidden();
     await expect(page.getByTestId('streak-widget')).toBeVisible();
     await page.getByRole('button', { name: /Memoria viva/ }).click();
+    await page.getByTestId('book-sheet').screenshot({ path: join(shots, 'mobile-book-detail.png') });
     await page.getByRole('button', { name: 'Síntesis 15 min' }).click();
     await expect(page.getByTestId('capsule-card')).toBeVisible();
     await page.getByRole('button', { name: 'Siguiente' }).click();
@@ -228,5 +254,14 @@ test.describe('móvil', () => {
     await expect(page.locator('input[value="gemini-2.0-flash"]')).toHaveCount(1);
     await page.getByTestId('bottom-nav').getByRole('button', { name: 'Repaso' }).click();
     await expect(page.getByTestId('review-view')).toBeVisible();
+    await page.screenshot({ path: join(shots, 'mobile-review.png') });
+    await page.getByTestId('bottom-nav').getByRole('button', { name: 'Biblioteca' }).click();
+    await page.getByRole('button', { name: /Semillas de atención/ }).click();
+    await page.getByRole('button', { name: 'Leer', exact: true }).click();
+    await expect(page.locator('p.drop-cap')).toBeVisible();
+    await page.screenshot({ path: join(shots, 'mobile-reader.png') });
+    await page.getByRole('button', { name: /^Capítulo \d+$/ }).click();
+    await expect(page.getByTestId('reader-sheet')).toBeVisible();
+    await page.screenshot({ path: join(shots, 'mobile-reader-sheet.png') });
   });
 });

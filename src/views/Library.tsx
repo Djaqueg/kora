@@ -13,7 +13,8 @@ export function Library() {
 
   return (
     <div className="page" data-testid="library">
-      <header className="page-head">
+      <header className="page-head library-head">
+        <span className="avatar-btn" aria-hidden="true" />
         <div>
           <p className="eyebrow">{greeting()}</p>
           <h1>¿Qué quieres recordar hoy?</h1>
@@ -51,7 +52,7 @@ export function Library() {
           </div>
         </div>
         <div className="ring-wrap">
-          <div className="ring" style={{ background: `conic-gradient(#f0b429 ${minutePct}%, rgba(255,255,255,.22) 0)` }}>
+          <div className="ring" style={{ background: `conic-gradient(#9BB8C5 ${minutePct}%, #E4EEF2 0)` }}>
             <div className="ring-inner">
               <strong>{formatMinutes(goal.minutesToday)}</strong>
               <small>de {goal.goalMinutes} min</small>
@@ -97,7 +98,7 @@ export function Library() {
                     <span className="muted">{Math.round(book.progress)}%</span>
                   </span>
                   <strong className="book-title">{book.title}</strong>
-                  <span className="muted">{book.author}</span>
+                  <span className="muted">Por: {book.author}</span>
                   <span className="bar" aria-hidden="true"><span style={{ width: `${Math.min(100, book.progress)}%` }} /></span>
                   <span className="card-meta">{capsuleCount} cápsulas · {cardCount} tarjetas</span>
                 </span>

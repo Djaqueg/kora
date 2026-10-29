@@ -31,7 +31,7 @@ function Shell() {
           <span className="logo-mark">K</span>
           <span>
             <strong>Kora</strong>
-            <small>Lee. Sintetiza. Recuerda.</small>
+            <small>Lee. Sintetiza.<br />Recuerda.</small>
           </span>
         </div>
         <nav>

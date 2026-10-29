@@ -3,7 +3,8 @@ export type HighlightColor = 'yellow' | 'green' | 'blue' | 'rose';
 export type AiProvider = 'gemini' | 'nvidia' | 'none';
 export type ContentSource = 'seed' | 'manual' | 'local' | 'ai';
 export type ReaderTheme = 'claro' | 'sepia' | 'oscuro';
-export type ReaderFont = 'literata' | 'outfit' | 'serif';
+export type ReaderFont = 'newsreader' | 'playfair' | 'literata' | 'jakarta' | 'outfit' | 'serif';
+export type ScrollMode = 'scroll' | 'page';
 
 export interface ReadingPosition {
   chapterId: string;
@@ -24,6 +25,8 @@ export interface Book {
   driveFileId?: string;
   fileName?: string;
   summary?: string;
+  rating?: number;
+  favorite?: boolean;
 }
 
 export interface Chapter {
@@ -120,6 +123,8 @@ export interface Settings {
   fontFamily: ReaderFont;
   fontSize: number;
   lineHeight: number;
+  scrollMode: ScrollMode;
+  brightness: number;
 }
 
 export type TombstoneKind = 'book' | 'chapter' | 'highlight' | 'capsule' | 'flashcard' | 'quiz';
@@ -187,8 +192,10 @@ export const defaultSettings: Settings = {
   googleTokenExpiry: 0,
   driveFolderId: '',
   driveFolderName: '',
-  theme: 'sepia',
-  fontFamily: 'literata',
-  fontSize: 19,
-  lineHeight: 1.65,
+  theme: 'claro',
+  fontFamily: 'newsreader',
+  fontSize: 23,
+  lineHeight: 1.72,
+  scrollMode: 'scroll',
+  brightness: 86,
 };

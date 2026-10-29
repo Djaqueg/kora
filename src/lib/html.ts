@@ -144,7 +144,7 @@ export function selectionOffsets(root: HTMLElement, range: Range): { start: numb
   return { start: Math.min(start, end), end: Math.max(start, end) };
 }
 
-export function scrollToQuote(root: HTMLElement, quote: string): boolean {
+export function scrollToQuote(root: HTMLElement, quote: string, behavior: ScrollBehavior = 'smooth'): boolean {
   const needle = quote.trim().slice(0, 90);
   if (needle.length < 2) return false;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -161,7 +161,7 @@ export function scrollToQuote(root: HTMLElement, quote: string): boolean {
   for (const node of nodes) {
     if (acc + node.data.length > idx) {
       const el = node.parentElement;
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el?.scrollIntoView({ behavior, block: 'center' });
       el?.classList.add('flash-target');
       window.setTimeout(() => el?.classList.remove('flash-target'), 1600);
       return true;

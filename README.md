@@ -8,7 +8,7 @@ Todo vive en el dispositivo. No hay servidor de Kora. La app se instala, funcion
 
 - **Biblioteca.** Portadas, autor, formato, progreso, cápsulas y tarjetas. Meta de 15 minutos o 1 cápsula, y la racha del día.
 - **Tres libros de ejemplo**, escritos para Kora, listos al abrir la app: *Semillas de atención* (MD), *El cuaderno de las decisiones* (TXT) y *Memoria viva* (EPUB). Traen capítulos completos, subrayados, ideas clave, flashcards y mini-quiz.
-- **Lector.** Índice, búsqueda, tamaño, interlineado, fuente y temas Claro, Sepia y Oscuro. El texto se selecciona para subrayar en cuatro colores, anotar y convertir el pasaje en flashcard o idea clave.
+- **Lector.** Página blanca de libro, capitular, «Capítulo N» y «Página X». Al tocar la página se abre una hoja con audio, modo noche, capítulos, tamaño (A A A), desplazamiento continuo o paginado, y brillo. El texto se selecciona para subrayar en cuatro colores, anotar y convertir el pasaje en flashcard o idea clave. Temas Claro, Sepia y Oscuro.
 - **Voz.** El lector y el resumen de cápsulas usan la Web Speech API, con preferencia por voces en español, velocidad de 0,75× a 2×, pausa y salto de párrafo o capítulo.
 - **Síntesis de 15 min.** Cápsulas con título, idea, «En la práctica» y cita. El audio resumen las lee seguidas. Cada una vuelve al pasaje del libro.
 - **IA opcional.** Gemini o un endpoint compatible con OpenAI (NVIDIA Build, por defecto `https://integrate.api.nvidia.com/v1`). La clave se guarda solo en este navegador.
