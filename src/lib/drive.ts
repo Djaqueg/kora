@@ -39,7 +39,7 @@ export function requestGoogleToken(clientId: string): Promise<{ accessToken: str
             resolve({ accessToken: response.access_token, expiresIn: response.expires_in || 3600 });
           },
         });
-        client.requestAccessToken({ prompt: 'consent' });
+        client.requestAccessToken({ prompt: 'select_account consent' });
       }),
   );
 }

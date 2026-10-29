@@ -72,6 +72,10 @@ test.describe('pestañas de ajustes', () => {
       await openSettings(page, 'sync');
       await expect(page.getByRole('tab', { name: 'Datos' })).toHaveAttribute('aria-selected', 'true');
       await expect(page.getByRole('heading', { name: 'Respaldo' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Sincronizar', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Subir a Drive' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Bajar de Drive' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Importar libros desde Drive' })).toBeVisible();
     });
   });
 
@@ -125,6 +129,8 @@ test.describe('pestañas de ajustes', () => {
       await page.goto('./#/ajustes?seccion=sync');
       await expect(page.getByRole('tab', { name: 'Datos' })).toHaveAttribute('aria-selected', 'true');
       await expect(page.getByRole('heading', { name: 'Sincronización' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Sincronizar', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Subir a Drive' })).toBeVisible();
     });
   });
 });

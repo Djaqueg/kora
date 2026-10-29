@@ -274,32 +274,45 @@ export function DrivePanel() {
         />
       </label>
       {settings.driveFolderName && <p className="muted">Carpeta activa: {settings.driveFolderName}</p>}
-      <div className="row-actions">
-        <button className="btn secondary" type="button" onClick={() => void loadFiles()} disabled={Boolean(busy)}>Ver libros de la carpeta</button>
-        <button className="btn secondary" type="button" onClick={() => void push()} disabled={Boolean(busy)}>Subir kora-sync.json</button>
-        <button className="btn secondary" type="button" onClick={() => void pull()} disabled={Boolean(busy)}>Bajar y combinar</button>
-      </div>
-      {files.length > 0 && (
-        <ul className="file-list">
-          {files.map((file) => (
-            <li key={file.id}>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={picked.includes(file.id)}
-                  onChange={(event) => setPicked((list) => event.target.checked ? [...list, file.id] : list.filter((id) => id !== file.id))}
-                />
-                {file.name}
-              </label>
-            </li>
-          ))}
-        </ul>
-      )}
-      {files.length > 0 && (
-        <button className="btn" type="button" onClick={() => void downloadPicked()} disabled={Boolean(busy) || !picked.length}>
-          Descargar seleccionados
-        </button>
-      )}
+
+      <section className="sync-panel" aria-labelledby="sync-action-title" data-testid="sync-block">
+        <h3 id="sync-action-title">Sincronizar</h3>
+        <p className="muted">Envía o trae el progreso, los subrayados, las cápsulas, las tarjetas y los ajustes de lectura entre este dispositivo y la carpeta.</p>
+        <div className="sync-actions">
+          <button className="btn" type="button" onClick={() => void push()} disabled={Boolean(busy)}>Subir a Drive</button>
+          <button className="btn secondary" type="button" onClick={() => void pull()} disabled={Boolean(busy)}>Bajar de Drive</button>
+        </div>
+        <p className="sync-help">Subir guarda una copia en la carpeta (<code>kora-sync.json</code>). Bajar la combina con lo que ya hay aquí; si algo difiere, se queda la versión más reciente.</p>
+      </section>
+
+      <section className="sync-panel" aria-labelledby="import-books-title" data-testid="import-books">
+        <h3 id="import-books-title">Importar libros desde Drive</h3>
+        <p className="muted">Este paso trae los EPUB, PDF, TXT y MD de la carpeta a la biblioteca. No mueve el progreso: eso lo hace Sincronizar.</p>
+        <div className="row-actions">
+          <button className="btn secondary" type="button" onClick={() => void loadFiles()} disabled={Boolean(busy)}>Ver libros de la carpeta</button>
+        </div>
+        {files.length > 0 && (
+          <ul className="file-list">
+            {files.map((file) => (
+              <li key={file.id}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={picked.includes(file.id)}
+                    onChange={(event) => setPicked((list) => event.target.checked ? [...list, file.id] : list.filter((id) => id !== file.id))}
+                  />
+                  {file.name}
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+        {files.length > 0 && (
+          <button className="btn" type="button" onClick={() => void downloadPicked()} disabled={Boolean(busy) || !picked.length}>
+            Descargar seleccionados
+          </button>
+        )}
+      </section>
       {busy && <p className="muted">{busy}</p>}
       {message && <p className={isError ? 'form-error' : 'form-note'} role={isError ? 'alert' : 'status'}>{message}</p>}
     </div>
