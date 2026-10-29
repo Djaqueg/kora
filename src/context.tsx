@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { generateWithAi } from './lib/ai';
 import { downloadJson, readJsonFile } from './lib/backup';
 import { todayKey } from './lib/dates';
+import { decryptAiSecrets } from './lib/ai-crypto';
+import { buildDriveSnapshot } from './lib/drive-snapshot';
 import { downloadSync, uploadSync } from './lib/drive';
 import { generateLocal } from './lib/extract';
 import { applySm2, type Grade } from './lib/sm2';
@@ -13,6 +15,7 @@ import {
   exportSnapshot,
   importBuffer,
   importSnapshot,
+  loadAiSyncPassword,
   loadLibrary,
   recordActivity,
   removeCapsule,
@@ -28,6 +31,7 @@ import {
   saveStreak,
 } from './db';
 import type {
+  AiSecrets,
   Book,
   Capsule,
   Chapter,
@@ -124,9 +128,15 @@ export function KoraProvider({ children }: { children: ReactNode }) {
   const streakRef = useRef<Streak | null>(null);
   const booksRef = useRef<Book[]>([]);
   const highlightsRef = useRef<Highlight[]>([]);
+  const settingsRef = useRef<Settings | null>(null);
+  const settingsSeen = useRef<Settings | null>(null);
   streakRef.current = streak;
   booksRef.current = books;
   highlightsRef.current = highlights;
+  if (settings !== settingsSeen.current) {
+    settingsSeen.current = settings;
+    settingsRef.current = settings;
+  }
 
   const toast = useCallback((text: string) => {
     const id = Date.now() + Math.random();
@@ -170,13 +180,19 @@ export function KoraProvider({ children }: { children: ReactNode }) {
     setInstallEvent(null);
   }, [installEvent]);
 
-  const updateSettings = useCallback(async (patch: Partial<Settings>) => {
-    setSettings((current) => {
-      if (!current) return current;
-      const next = { ...current, ...patch };
-      void saveSettings(next);
-      return next;
+  const settingsWrite = useRef(Promise.resolve());
+  const updateSettings = useCallback((patch: Partial<Settings>) => {
+    const current = settingsRef.current;
+    if (!current) return Promise.resolve();
+    const next = { ...current, ...patch };
+    settingsRef.current = next;
+    setSettings(next);
+    const run = settingsWrite.current.then(async () => {
+      const latest = settingsRef.current;
+      if (latest) await saveSettings(latest);
     });
+    settingsWrite.current = run.then(() => undefined, () => undefined);
+    return run;
   }, []);
 
   const updateGoals = useCallback(async (patch: Partial<Pick<Streak, 'dailyGoalMinutes' | 'dailyCapsuleGoal'>>) => {
@@ -395,19 +411,64 @@ export function KoraProvider({ children }: { children: ReactNode }) {
   }, [refresh, toast]);
 
   const pushSync = useCallback(async () => {
-    if (!settings?.googleAccessToken || !settings.driveFolderId) throw new Error('Conecta Google y elige una carpeta.');
     const snapshot = await exportSnapshot();
-    await uploadSync(settings.googleAccessToken, settings.driveFolderId, JSON.stringify(snapshot));
-    toast('kora-sync.json subido a la carpeta de Drive.');
-  }, [settings, toast]);
+    const { googleAccessToken, driveFolderId, syncEncryptedAiKeys } = snapshot.settings;
+    if (!googleAccessToken || !driveFolderId) throw new Error('Conecta Google y elige una carpeta.');
+    const password = syncEncryptedAiKeys ? await loadAiSyncPassword() : '';
+    const payload = await buildDriveSnapshot(snapshot, password);
+    await uploadSync(googleAccessToken, driveFolderId, JSON.stringify(payload));
+    toast(payload.aiSecretsMode === 'encrypted'
+      ? 'kora-sync.json subido. Las claves de IA van cifradas.'
+      : 'kora-sync.json subido a la carpeta de Drive.');
+  }, [toast]);
 
   const pullSync = useCallback(async () => {
-    if (!settings?.googleAccessToken || !settings.driveFolderId) throw new Error('Conecta Google y elige una carpeta.');
-    const snapshot = await downloadSync(settings.googleAccessToken, settings.driveFolderId);
-    await importSnapshot(snapshot, 'merge');
+    const current = (await loadLibrary()).settings;
+    if (!current.googleAccessToken || !current.driveFolderId) throw new Error('Conecta Google y elige una carpeta.');
+    const snapshot = await downloadSync(current.googleAccessToken, current.driveFolderId);
+    const remoteHasCipher = snapshot.aiSecretsMode === 'encrypted' && Boolean(snapshot.encryptedAi);
+    let secrets: AiSecrets | null = null;
+    let keyError = '';
+    let toImport = snapshot;
+    if (!current.syncEncryptedAiKeys) {
+      toImport = { ...snapshot, aiSecretsMode: 'omitted' };
+    } else if (snapshot.aiSecretsMode === 'encrypted') {
+      if (!snapshot.encryptedAi) {
+        keyError = 'El archivo de Drive indica claves cifradas, pero falta el bloque. Libros, progreso y subrayados sí se sincronizaron.';
+      } else {
+        const password = await loadAiSyncPassword();
+        if (!password.trim()) {
+          keyError = 'Falta la contraseña de cifrado. Libros, progreso y subrayados se sincronizaron; las claves de IA no.';
+        } else {
+          try {
+            secrets = await decryptAiSecrets(snapshot.encryptedAi, password);
+          } catch (reason) {
+            keyError = reason instanceof Error
+              ? reason.message
+              : 'La contraseña no es correcta. Las claves de IA no se recuperaron; libros, progreso y subrayados sí se sincronizaron.';
+          }
+        }
+      }
+    }
+    await importSnapshot(toImport, 'merge');
+    if (secrets) {
+      const latest = await loadLibrary();
+      const next = {
+        ...latest.settings,
+        aiProvider: secrets.aiProvider,
+        geminiKey: secrets.geminiKey,
+        geminiModel: secrets.geminiModel,
+        nvidiaKey: secrets.nvidiaKey,
+        nvidiaBaseUrl: secrets.nvidiaBaseUrl,
+        nvidiaModel: secrets.nvidiaModel,
+      };
+      settingsRef.current = next;
+      await saveSettings(next);
+    }
     await refresh();
-    toast('Sincronización bajada y combinada.');
-  }, [refresh, settings, toast]);
+    if (keyError) throw new Error(keyError);
+    toast(remoteHasCipher && secrets ? 'Sincronización bajada. Las claves de IA se recuperaron.' : 'Sincronización bajada y combinada.');
+  }, [refresh, toast]);
 
   const value = useMemo<KoraContextValue | null>(() => {
     if (!settings || !streak) return null;

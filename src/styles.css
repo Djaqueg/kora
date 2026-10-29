@@ -695,6 +695,31 @@ code { font-family: ui-monospace, monospace; font-size: 0.92em; }
   background: var(--ink);
   color: white;
 }
+.help-link {
+  justify-self: start;
+  width: fit-content;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+.sync-lock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 6px 0 2px;
+}
+.sync-lock > div { min-width: 0; flex: 1; }
+.sync-lock strong {
+  display: block;
+  font-family: var(--serif);
+  font-weight: 550;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.sync-lock .muted { margin: 4px 0 0; font-size: 13px; }
+.sync-lock .switch { flex: none; }
 @media (min-width: 960px) {
   .sheet-overlay { left: var(--sidebar); }
   .app-read .main { padding: 28px 24px 28px; }

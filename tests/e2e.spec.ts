@@ -200,7 +200,9 @@ test.describe('escritorio', () => {
     await page.getByRole('tab', { name: 'Datos' }).click();
     await expect(page.getByText(/Client ID de Google/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Exportar respaldo' })).toBeVisible();
-    await expect(page.getByText(/orígenes autorizados/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: '¿Cómo obtengo el Client ID?' })).toBeVisible();
+    await expect(page.getByRole('switch', { name: 'Sincronizar claves de IA cifradas en Drive' })).toBeVisible();
+    await expect(page.getByText(/orígenes autorizados/i)).toBeHidden();
     await page.getByRole('tab', { name: 'Lectura' }).click();
     await page.getByRole('button', { name: 'Sepia' }).click();
   });

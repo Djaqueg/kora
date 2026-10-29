@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useKora } from '../context';
+import { loadAiSyncPassword, saveAiSyncPassword } from '../db';
 import { downloadDriveFile, listBookFiles, listFolders, requestGoogleToken, type DriveItem } from '../lib/drive';
 
 export function DrivePanel() {
@@ -9,22 +10,40 @@ export function DrivePanel() {
   const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
+  const [isError, setIsError] = useState(false);
+  const [help, setHelp] = useState(false);
+  const [password, setPassword] = useState('');
   const connected = Boolean(settings.googleAccessToken) && settings.googleTokenExpiry > Date.now();
+
+  useEffect(() => {
+    let live = true;
+    void loadAiSyncPassword().then((value) => {
+      if (live) setPassword(value);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  function note(text: string, error = false) {
+    setIsError(error);
+    setMessage(text);
+    if (error) toast(text);
+  }
 
   function fail(reason: unknown) {
     const text = reason instanceof Error ? reason.message : 'No se pudo hablar con Google Drive.';
     if (text === 'TOKEN_EXPIRED') {
       void updateSettings({ googleAccessToken: '', googleTokenExpiry: 0 });
-      setMessage('El token caducó. Vuelve a conectar la cuenta.');
+      note('El token caducó. Vuelve a conectar la cuenta.', true);
       return;
     }
-    setMessage(text);
-    toast(text);
+    note(text, true);
   }
 
   async function connect() {
     if (!settings.googleClientId.trim()) {
-      setMessage('Primero pega el Client ID de Google Cloud.');
+      note('Primero pega el Client ID de Google Cloud.', true);
       return;
     }
     setBusy('Conectando…');
@@ -34,7 +53,7 @@ export function DrivePanel() {
         googleAccessToken: token.accessToken,
         googleTokenExpiry: Date.now() + token.expiresIn * 1000,
       });
-      setMessage('Cuenta conectada en este dispositivo.');
+      note('Cuenta conectada en este dispositivo.');
     } catch (reason) {
       fail(reason);
     } finally {
@@ -42,22 +61,30 @@ export function DrivePanel() {
     }
   }
 
+  async function disconnect() {
+    await updateSettings({ googleAccessToken: '', googleTokenExpiry: 0 });
+    setFolders([]);
+    setFiles([]);
+    setPicked([]);
+    note('Cuenta desconectada en este dispositivo.');
+  }
+
   function usePastedToken() {
     const token = settings.googleAccessToken.trim();
     if (!token) {
-      setMessage('Pega un token de acceso.');
+      note('Pega un token de acceso.', true);
       return;
     }
     void updateSettings({ googleTokenExpiry: Date.now() + 50 * 60 * 1000 });
-    setMessage('Token guardado solo en este navegador.');
+    note('Token guardado solo en este navegador.');
   }
 
-  async function loadFolders() {
+  async function loadFolderList() {
     setBusy('Buscando carpetas…');
     try {
       const found = await listFolders(settings.googleAccessToken);
       setFolders(found);
-      setMessage(found.length ? `${found.length} carpetas encontradas.` : 'No aparecen carpetas. Prueba a pegar el ID.');
+      note(found.length ? `${found.length} carpetas encontradas.` : 'No aparecen carpetas. Prueba a pegar el ID.');
     } catch (reason) {
       fail(reason);
     } finally {
@@ -69,12 +96,12 @@ export function DrivePanel() {
     await updateSettings({ driveFolderId: id, driveFolderName: name });
     setFiles([]);
     setPicked([]);
-    setMessage(name ? `Carpeta «${name}» seleccionada.` : 'ID de carpeta guardado.');
+    note(name ? `Carpeta «${name}» seleccionada.` : 'ID de carpeta guardado.');
   }
 
   async function loadFiles() {
     if (!settings.driveFolderId) {
-      setMessage('Elige una carpeta primero.');
+      note('Elige una carpeta primero.', true);
       return;
     }
     setBusy('Listando libros…');
@@ -82,7 +109,7 @@ export function DrivePanel() {
       const found = await listBookFiles(settings.googleAccessToken, settings.driveFolderId);
       setFiles(found);
       setPicked(found.map((file) => file.id));
-      setMessage(found.length ? `${found.length} archivos listos para descargar.` : 'Esa carpeta no tiene EPUB, PDF, TXT ni MD.');
+      note(found.length ? `${found.length} archivos listos para descargar.` : 'Esa carpeta no tiene EPUB, PDF, TXT ni MD.');
     } catch (reason) {
       fail(reason);
     } finally {
@@ -99,7 +126,7 @@ export function DrivePanel() {
         const data = await downloadDriveFile(settings.googleAccessToken, file.id);
         await importDriveBuffer(file.name, data, file.id);
       }
-      setMessage(`${chosen.length} archivo(s) importados a la biblioteca.`);
+      note(`${chosen.length} archivo(s) importados a la biblioteca.`);
       toast('Libros de Drive importados.');
     } catch (reason) {
       fail(reason);
@@ -108,11 +135,20 @@ export function DrivePanel() {
     }
   }
 
+  async function rememberPassword(value: string) {
+    setPassword(value);
+    await saveAiSyncPassword(value);
+  }
+
   async function push() {
     setBusy('Subiendo sincronización…');
     try {
+      await saveAiSyncPassword(password);
+      await updateSettings({ syncEncryptedAiKeys: settings.syncEncryptedAiKeys });
       await pushSync();
-      setMessage('kora-sync.json actualizado en la carpeta.');
+      note(settings.syncEncryptedAiKeys
+        ? 'kora-sync.json actualizado. Las claves de IA van cifradas.'
+        : 'kora-sync.json actualizado en la carpeta.');
     } catch (reason) {
       fail(reason);
     } finally {
@@ -123,8 +159,10 @@ export function DrivePanel() {
   async function pull() {
     setBusy('Bajando sincronización…');
     try {
+      await saveAiSyncPassword(password);
+      await updateSettings({ syncEncryptedAiKeys: settings.syncEncryptedAiKeys });
       await pullSync();
-      setMessage('Datos combinados desde kora-sync.json.');
+      note('Datos combinados desde kora-sync.json.');
     } catch (reason) {
       fail(reason);
     } finally {
@@ -134,16 +172,6 @@ export function DrivePanel() {
 
   return (
     <div className="stack" id="sincronizacion">
-      <p className="muted">
-        Kora no tiene servidor. El token y el Client ID viven en IndexedDB de este dispositivo. Drive sirve para traer libros y para compartir <code>kora-sync.json</code> entre el PC y Android.
-      </p>
-      <ol className="steps">
-        <li>En Google Cloud Console crea un proyecto y activa la API de Google Drive.</li>
-        <li>Crea un ID de cliente OAuth de tipo <strong>Aplicación web</strong>.</li>
-        <li>En orígenes autorizados añade <code>http://localhost:5173</code>, <code>http://127.0.0.1:4173</code> y, si publicas en Pages, <code>https://tu-usuario.github.io</code> (sin la ruta del repositorio).</li>
-        <li>Pega aquí el Client ID y pulsa Conectar. Acepta los permisos de lectura y de archivos creados por la app.</li>
-        <li>Si aún no tienes Client ID, exporta el respaldo JSON y súbelo a la carpeta a mano: también sirve para mover la biblioteca.</li>
-      </ol>
       <label className="field">
         Client ID de Google
         <input
@@ -154,9 +182,62 @@ export function DrivePanel() {
         />
       </label>
       <div className="row-actions">
-        <button className="btn" type="button" onClick={() => void connect()} disabled={Boolean(busy)}>Conectar cuenta Google</button>
+        {connected ? (
+          <button className="btn secondary" type="button" onClick={() => void disconnect()} disabled={Boolean(busy)}>Desconectar</button>
+        ) : (
+          <button className="btn" type="button" onClick={() => void connect()} disabled={Boolean(busy)}>Conectar cuenta Google</button>
+        )}
         <span className="pill">{connected ? 'Conectada' : 'Sin conectar'}</span>
       </div>
+      <button
+        className="text-btn help-link"
+        type="button"
+        aria-expanded={help}
+        aria-controls="client-id-help"
+        onClick={() => setHelp((open) => !open)}
+      >
+        ¿Cómo obtengo el Client ID?
+      </button>
+      {help && (
+        <div id="client-id-help">
+          <p className="muted">Kora no tiene servidor. El token y el Client ID viven en este dispositivo.</p>
+          <ol className="steps">
+            <li>En Google Cloud Console crea un proyecto y activa la API de Google Drive.</li>
+            <li>Crea un ID de cliente OAuth de tipo <strong>Aplicación web</strong>.</li>
+            <li>En orígenes autorizados añade <code>http://localhost:5173</code>, <code>http://127.0.0.1:4173</code> y, si publicas en Pages, <code>https://tu-usuario.github.io</code> (sin la ruta del repositorio).</li>
+            <li>Pega aquí el Client ID y pulsa Conectar. Acepta los permisos de lectura y de archivos creados por la app.</li>
+            <li>Si aún no tienes Client ID, exporta el respaldo JSON y súbelo a la carpeta a mano: también sirve para mover la biblioteca.</li>
+          </ol>
+        </div>
+      )}
+
+      <div className="sync-lock">
+        <div>
+          <strong id="sync-ai-label">Sincronizar claves de IA cifradas en Drive</strong>
+          <p className="muted">Gemini y NVIDIA se cifran aquí. La contraseña no se sube.</p>
+        </div>
+        <button
+          className={`switch${settings.syncEncryptedAiKeys ? ' on' : ''}`}
+          type="button"
+          role="switch"
+          aria-checked={settings.syncEncryptedAiKeys}
+          aria-labelledby="sync-ai-label"
+          onClick={() => void updateSettings({ syncEncryptedAiKeys: !settings.syncEncryptedAiKeys })}
+        />
+      </div>
+      {settings.syncEncryptedAiKeys && (
+        <label className="field">
+          Contraseña de cifrado
+          <input
+            type="password"
+            value={password}
+            autoComplete="new-password"
+            placeholder="La misma en cada dispositivo"
+            onChange={(event) => void rememberPassword(event.target.value)}
+          />
+        </label>
+      )}
+
       <label className="field">
         O pega un token de acceso (OAuth)
         <input
@@ -169,7 +250,7 @@ export function DrivePanel() {
       </label>
       <button className="btn secondary" type="button" onClick={usePastedToken}>Usar este token</button>
       <div className="row-actions">
-        <button className="btn secondary" type="button" onClick={() => void loadFolders()} disabled={!settings.googleAccessToken || Boolean(busy)}>Buscar carpetas</button>
+        <button className="btn secondary" type="button" onClick={() => void loadFolderList()} disabled={!settings.googleAccessToken || Boolean(busy)}>Buscar carpetas</button>
         {folders.length > 0 && (
           <select
             aria-label="Carpeta de Drive"
@@ -220,7 +301,7 @@ export function DrivePanel() {
         </button>
       )}
       {busy && <p className="muted">{busy}</p>}
-      {message && <p className="form-note" role="status">{message}</p>}
+      {message && <p className={isError ? 'form-error' : 'form-note'} role={isError ? 'alert' : 'status'}>{message}</p>}
     </div>
   );
 }
