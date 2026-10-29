@@ -64,6 +64,7 @@ export async function buildSeed(now = Date.now()): Promise<SeedPayload> {
       source: 'builtin',
       fileName: `${seed.id}.${seed.format.toLowerCase()}`,
       summary: seed.summary,
+      rating: [4, 5, 4][order] ?? 4,
     });
     chapters.push(...parsed);
 

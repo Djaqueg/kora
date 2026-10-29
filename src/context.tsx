@@ -78,6 +78,7 @@ interface KoraContextValue {
   importDriveBuffer: (fileName: string, data: ArrayBuffer, driveFileId: string) => Promise<void>;
   removeBook: (bookId: string) => Promise<void>;
   saveProgress: (bookId: string, position: ReadingPosition, progress: number) => Promise<void>;
+  patchBook: (bookId: string, patch: Partial<Pick<Book, 'favorite' | 'rating'>>) => Promise<void>;
   addHighlight: (input: HighlightInput) => Promise<Highlight>;
   updateHighlight: (highlight: Highlight) => Promise<void>;
   deleteHighlight: (highlight: Highlight) => Promise<void>;
@@ -219,6 +220,15 @@ export function KoraProvider({ children }: { children: ReactNode }) {
     const book = booksRef.current.find((item) => item.id === bookId);
     if (!book) return;
     const next = { ...book, lastPosition: position, progress, updatedAt: Date.now() };
+    booksRef.current = booksRef.current.map((item) => (item.id === bookId ? next : item));
+    setBooks(booksRef.current);
+    await saveBook(next);
+  }, []);
+
+  const patchBook = useCallback(async (bookId: string, patch: Partial<Pick<Book, 'favorite' | 'rating'>>) => {
+    const book = booksRef.current.find((item) => item.id === bookId);
+    if (!book) return;
+    const next = { ...book, ...patch, updatedAt: Date.now() };
     booksRef.current = booksRef.current.map((item) => (item.id === bookId ? next : item));
     setBooks(booksRef.current);
     await saveBook(next);
@@ -422,6 +432,7 @@ export function KoraProvider({ children }: { children: ReactNode }) {
       importDriveBuffer,
       removeBook,
       saveProgress,
+      patchBook,
       addHighlight,
       updateHighlight,
       deleteHighlight,
@@ -444,7 +455,7 @@ export function KoraProvider({ children }: { children: ReactNode }) {
     };
   }, [
     ready, error, books, highlights, capsules, cards, quizzes, settings, streak, tts, toasts, installEvent,
-    toast, promptInstall, updateSettings, updateGoals, importFiles, importDriveBuffer, removeBook, saveProgress,
+    toast, promptInstall, updateSettings, updateGoals, importFiles, importDriveBuffer, removeBook, saveProgress, patchBook,
     addHighlight, updateHighlight, deleteHighlight, addCapsule, updateCapsule, deleteCapsule, completeCapsule,
     addCard, updateCard, deleteCard, reviewCard, generateForBook, recordMinutes, exportBackup, importBackup,
     restoreExamples, pushSync, pullSync,

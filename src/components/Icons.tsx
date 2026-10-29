@@ -9,7 +9,7 @@ function base(props: IconProps) {
     viewBox: '0 0 24 24',
     fill: 'none',
     stroke: 'currentColor',
-    strokeWidth: 1.8,
+    strokeWidth: 1.6,
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
     'aria-hidden': true,
@@ -98,6 +98,84 @@ export function IconSpark(props: IconProps) {
   return (
     <svg {...base(props)}>
       <path d="M12 3l1.6 5.2L19 10l-5.4 1.8L12 17l-1.6-5.2L5 10l5.4-1.8z" />
+    </svg>
+  );
+}
+
+export function IconStar({ filled, ...props }: IconProps & { filled?: boolean }) {
+  return (
+    <svg {...base(props)}>
+      <path d="M12 3.7 14.05 8.7l5.45.48-4.15 3.58 1.28 5.34L12 15.7 7.37 18.1l1.28-5.34L4.5 9.18l5.45-.48Z" fill={filled ? 'currentColor' : 'none'} />
+    </svg>
+  );
+}
+
+export function IconHeart({ filled, ...props }: IconProps & { filled?: boolean }) {
+  return (
+    <svg {...base(props)}>
+      <path d="M12 19.2s-6.4-4-6.4-8.2a3.55 3.55 0 0 1 6.4-2.1 3.55 3.55 0 0 1 6.4 2.1c0 4.2-6.4 8.2-6.4 8.2z" fill={filled ? 'currentColor' : 'none'} />
+    </svg>
+  );
+}
+
+export function IconDownload(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M12 4.5v9" />
+      <path d="m8.2 10.2 3.8 3.8 3.8-3.8" />
+      <path d="M5.5 18.5h13" />
+    </svg>
+  );
+}
+
+export function IconBookOpen(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M12 6.2C9.7 4.9 7.2 4.5 4.5 5v11.6c2.7-.4 5.2 0 7.5 1.3 2.3-1.3 4.8-1.7 7.5-1.3V5c-2.7-.5-5.2-.1-7.5 1.2z" />
+      <path d="M12 6.2v11.7" />
+    </svg>
+  );
+}
+
+export function IconMoon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M15.8 3.6A7.2 7.2 0 1 0 20.4 14 5.9 5.9 0 0 1 15.8 3.6z" />
+    </svg>
+  );
+}
+
+export function IconSun(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <circle cx="12" cy="12" r="3.4" />
+      <path d="M12 3.2v1.8M12 19v1.8M4.8 12H3M21 12h-1.8M6.2 6.2 7.5 7.5M16.5 16.5l1.3 1.3M17.8 6.2 16.5 7.5M7.5 16.5 6.2 17.8" />
+    </svg>
+  );
+}
+
+export function IconBookmark(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M7 4.2h10a1 1 0 0 1 1 1V20l-6-3.1L6 20V5.2a1 1 0 0 1 1-1z" />
+    </svg>
+  );
+}
+
+export function IconBluetooth(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="m7.2 7.2 9.6 9.6L12 21.2V2.8l4.8 4.4L7.2 16.8" />
+    </svg>
+  );
+}
+
+export function IconSliders(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 8h16M4 16h16" />
+      <circle cx="9" cy="8" r="2.1" fill="var(--paper, #fff)" />
+      <circle cx="15" cy="16" r="2.1" fill="var(--paper, #fff)" />
     </svg>
   );
 }

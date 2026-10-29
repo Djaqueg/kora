@@ -59,12 +59,12 @@ function inCircle(x, y, cx, cy, r) {
   return dx * dx + dy * dy <= r * r;
 }
 
-const TEAL = [15, 110, 102, 255];
-const CREAM = [247, 243, 234, 255];
-const PAPER = [255, 250, 243, 255];
-const AMBER = [227, 155, 43, 255];
-const INK = [15, 110, 102, 255];
-const ROSE = [196, 92, 74, 255];
+const TEAL = [155, 184, 197, 255];
+const CREAM = [247, 251, 252, 255];
+const PAPER = [255, 255, 255, 255];
+const AMBER = [231, 241, 245, 255];
+const INK = [28, 36, 43, 255];
+const ROSE = [28, 36, 43, 255];
 
 function paintIcon(x, y, size, maskable) {
   let nx = x / (size - 1);
@@ -102,8 +102,8 @@ function paintIcon(x, y, size, maskable) {
       if (nx >= x0 && nx <= x1 && Math.abs(ny - y0) <= h) color = c;
     }
     if (inCircle(nx, ny, 0.74, 0.24, 0.07)) color = AMBER;
-    if (Math.abs(nx - 0.74) < 0.035 && Math.abs(ny - 0.24) < 0.008) color = CREAM;
-    if (Math.abs(ny - 0.24) < 0.035 && Math.abs(nx - 0.74) < 0.008) color = CREAM;
+    if (Math.abs(nx - 0.74) < 0.035 && Math.abs(ny - 0.24) < 0.008) color = INK;
+    if (Math.abs(ny - 0.24) < 0.035 && Math.abs(nx - 0.74) < 0.008) color = INK;
   }
   return color;
 }

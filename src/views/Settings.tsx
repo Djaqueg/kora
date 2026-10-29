@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { DrivePanel } from '../components/DrivePanel';
+import { BrightnessSlider, ScrollSwitch, TextSizePicker } from '../components/TypeControls';
 import { useKora } from '../context';
 
 export function Settings({ section }: { section?: string }) {
@@ -41,13 +42,28 @@ export function Settings({ section }: { section?: string }) {
         </div>
         <label className="field">Fuente
           <select value={settings.fontFamily} onChange={(event) => void updateSettings({ fontFamily: event.target.value as typeof settings.fontFamily })}>
+            <option value="newsreader">Newsreader</option>
+            <option value="playfair">Playfair Display</option>
             <option value="literata">Literata</option>
+            <option value="jakarta">Plus Jakarta Sans</option>
             <option value="outfit">Outfit</option>
             <option value="serif">Serif del sistema</option>
           </select>
         </label>
-        <label className="field">Tamaño {settings.fontSize}px
-          <input type="range" min={16} max={28} value={settings.fontSize} onChange={(event) => void updateSettings({ fontSize: Number(event.target.value) })} />
+        <div className="sheet-split">
+          <div>
+            <p className="sheet-label">Tamaño de texto</p>
+            <TextSizePicker value={settings.fontSize} onChange={(fontSize) => void updateSettings({ fontSize })} />
+          </div>
+          <div>
+            <p className="sheet-label">Desplazamiento</p>
+            <ScrollSwitch value={settings.scrollMode} onChange={(scrollMode) => void updateSettings({ scrollMode })} />
+          </div>
+        </div>
+        <p className="sheet-label">Brillo y calidez</p>
+        <BrightnessSlider value={settings.brightness} onChange={(brightness) => void updateSettings({ brightness })} />
+        <label className="field">Interlineado {settings.lineHeight.toFixed(2)}
+          <input type="range" min={1.4} max={2} step={0.05} value={settings.lineHeight} onChange={(event) => void updateSettings({ lineHeight: Number(event.target.value) })} />
         </label>
       </section>
 
