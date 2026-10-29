@@ -61,11 +61,11 @@ Kora no pide un backend. Tú creas el cliente OAuth y la app habla con Drive des
    - `http://localhost:5173`
    - `http://127.0.0.1:4173`
    - `https://<usuario>.github.io` si publicas en Pages
-4. En Kora, abre **Ajustes → Sincronización**, pega el Client ID y pulsa **Conectar cuenta Google**.
+4. En Kora, abre **Ajustes → Datos**, pega el Client ID y pulsa **Conectar cuenta Google**. Google muestra el selector de cuenta para que elijas la correcta.
 5. Acepta estos alcances: lectura de Drive (`drive.readonly`) y archivos que la app cree (`drive.file`).
 6. Elige la carpeta, o pega el ID que aparece en `https://drive.google.com/drive/folders/<ID>`.
-7. **Ver libros de la carpeta** lista `.epub`, `.pdf`, `.txt` y `.md`. **Descargar seleccionados** los guarda en IndexedDB.
-8. **Subir kora-sync.json** escribe progreso, subrayados, cápsulas, tarjetas, quiz, racha y ajustes de lectura. **Bajar y combinar** une ese archivo con lo que ya hay en el dispositivo. Si hay conflicto, gana la copia más reciente. Borrar un libro deja una marca para que la sincronización no lo restaure.
+7. En **Importar libros desde Drive**, **Ver libros de la carpeta** lista `.epub`, `.pdf`, `.txt` y `.md`. Marca los que quieras y **Descargar seleccionados** los guarda en la biblioteca.
+8. En **Sincronizar**, **Subir a Drive** escribe progreso, subrayados, cápsulas, tarjetas, quiz, racha y ajustes de lectura en `kora-sync.json`. **Bajar de Drive** une ese archivo con lo que ya hay en el dispositivo. Si hay conflicto, gana la copia más reciente. Borrar un libro deja una marca para que la sincronización no lo restaure.
 9. Las claves de IA no se suben en claro. Con **Sincronizar claves de IA cifradas en Drive** activo, Kora deriva una clave con PBKDF2 y cifra con AES-GCM. En Drive solo va el bloque cifrado, la sal y el IV. La contraseña se queda en el navegador. En el otro dispositivo, activa el mismo control, escribe la misma contraseña y baja el archivo. Si la contraseña no coincide, los libros y el progreso igual se combinan.
 
 Si todavía no tienes Client ID, usa **Exportar respaldo** y sube el JSON a la carpeta a mano. En el otro dispositivo, **Combinar JSON**. Ese respaldo local sí incluye las claves de API en claro: no lo compartas.

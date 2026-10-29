@@ -202,6 +202,12 @@ test.describe('escritorio', () => {
     await expect(page.getByRole('button', { name: 'Exportar respaldo' })).toBeVisible();
     await expect(page.getByRole('button', { name: '¿Cómo obtengo el Client ID?' })).toBeVisible();
     await expect(page.getByRole('switch', { name: 'Sincronizar claves de IA cifradas en Drive' })).toBeVisible();
+    await expect(page.getByTestId('sync-block')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sincronizar', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Subir a Drive' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Bajar de Drive' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Importar libros desde Drive' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ver libros de la carpeta' })).toBeVisible();
     await expect(page.getByText(/orígenes autorizados/i)).toBeHidden();
     await page.getByRole('tab', { name: 'Lectura' }).click();
     await page.getByRole('button', { name: 'Sepia' }).click();
