@@ -52,9 +52,12 @@ test.describe('pestañas de ajustes', () => {
       await page.getByRole('tab', { name: 'IA' }).click();
       await expect(page.getByRole('tab', { name: 'IA' })).toHaveAttribute('aria-selected', 'true');
       await expectOnlyPanel(page, ['Inteligencia artificial'], ['Sincronización', 'Respaldo', 'Lectura', 'Acerca de']);
-      await expect(page.getByText('Google Gemini')).toBeVisible();
-      await expect(page.getByText('NVIDIA Build / API compatible con OpenAI')).toBeVisible();
-      await expect(page.getByRole('textbox', { name: 'Base URL' })).toBeVisible();
+      await expect(page.getByRole('textbox', { name: 'Clave de Gemini' })).toBeVisible();
+      await expect(page.getByRole('combobox', { name: 'Modelo de Gemini' })).toHaveValue('gemini-2.0-flash');
+      await expect(page.getByRole('button', { name: 'Probar clave' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Borrar clave' })).toBeVisible();
+      await expect(page.getByText(/djaqueg\.github\.io/)).toBeVisible();
+      await expect(page.getByText(/NVIDIA/)).toHaveCount(0);
       await page.screenshot({ path: join(shots, 'desktop-ajustes-ia.png') });
 
       await page.getByRole('tab', { name: 'App' }).click();
@@ -114,7 +117,9 @@ test.describe('pestañas de ajustes', () => {
 
       await page.getByRole('tab', { name: 'IA' }).click();
       await expect(page.getByRole('heading', { name: 'Inteligencia artificial' })).toBeVisible();
-      await expect(page.getByText('Google Gemini')).toBeVisible();
+      await expect(page.getByRole('textbox', { name: 'Clave de Gemini' })).toBeVisible();
+      await expect(page.getByRole('combobox', { name: 'Modelo de Gemini' })).toHaveValue('gemini-2.0-flash');
+      await expect(page.getByText(/NVIDIA/)).toHaveCount(0);
       await expect(page.getByRole('heading', { name: 'Sincronización' })).toBeHidden();
       await page.screenshot({ path: join(shots, 'mobile-ajustes-ia.png') });
 

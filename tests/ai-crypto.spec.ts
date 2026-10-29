@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { AI_PBKDF2_ITERATIONS, decryptAiSecrets } from '../src/lib/ai-crypto';
-import { buildDriveSnapshot } from '../src/lib/drive-snapshot';
-import { defaultSettings, type BackupFile, type Settings } from '../src/types';
+import { AI_PBKDF2_ITERATIONS, decryptAiSecrets, encryptAiPlaintext } from '../src/lib/ai-crypto';
+import { buildDriveSnapshot, buildExportSnapshot } from '../src/lib/drive-snapshot';
+import { defaultSettings, type AiSecrets, type BackupFile, type Settings } from '../src/types';
 
 const PASSWORD = 'Kora-Llave-9f3c';
 const GEMINI = 'AIzaSy-KORA-SECRETO-7391';
@@ -33,17 +33,17 @@ function snapshot(settings: Partial<Settings>): BackupFile {
   };
 }
 
-test('el archivo de Drive lleva las claves cifradas y no la contraseña', async () => {
+test('el archivo de Drive lleva la clave de Gemini cifrada y no la contraseña', async () => {
   const source = snapshot({
     aiProvider: 'gemini',
     geminiKey: GEMINI,
-    geminiModel: 'gemini-kora-sync-test',
-    nvidiaKey: NVIDIA,
-    nvidiaBaseUrl: 'https://integrate.api.nvidia.com/v1',
-    nvidiaModel: 'meta/llama-3.1-70b-instruct',
+    geminiModel: 'gemini-2.5-pro',
     syncEncryptedAiKeys: true,
     theme: 'sepia',
+    googleAccessToken: 'ya29.no-debe-viajar',
+    googleTokenExpiry: Date.now() + 60_000,
   });
+  (source.settings as Settings & { nvidiaKey?: string }).nvidiaKey = NVIDIA;
 
   const payload = await buildDriveSnapshot(source, PASSWORD);
   const encoded = JSON.stringify(payload);
@@ -57,23 +57,45 @@ test('el archivo de Drive lleva las claves cifradas y no la contraseña', async 
   expect(encoded).not.toContain(GEMINI);
   expect(encoded).not.toContain(NVIDIA);
   expect(encoded).not.toContain(PASSWORD);
-  expect(encoded).not.toContain('gemini-kora-sync-test');
+  expect(encoded).not.toContain('ya29.no-debe-viajar');
+  expect(encoded).not.toContain('gemini-2.5-pro');
   expect(payload.settings.theme).toBe('sepia');
   expect(payload.settings.syncEncryptedAiKeys).toBeUndefined();
+  expect(payload.settings.googleAccessToken).toBeUndefined();
 
   const restored = await decryptAiSecrets(payload.encryptedAi!, PASSWORD);
   expect(restored.geminiKey).toBe(GEMINI);
-  expect(restored.nvidiaKey).toBe(NVIDIA);
-  expect(restored.geminiModel).toBe('gemini-kora-sync-test');
+  expect(restored.geminiModel).toBe('gemini-2.5-pro');
   expect(restored.aiProvider).toBe('gemini');
+  expect(restored).not.toHaveProperty('nvidiaKey');
   await expect(decryptAiSecrets(payload.encryptedAi!, 'otra-contraseña')).rejects.toThrow(/contraseña no es correcta/i);
+});
+
+test('un bloque antiguo con NVIDIA conserva Gemini y descarta la otra clave', async () => {
+  const legacy = {
+    aiProvider: 'nvidia',
+    geminiKey: GEMINI,
+    geminiModel: 'gemini-2.0-flash',
+    nvidiaKey: NVIDIA,
+    nvidiaBaseUrl: 'https://integrate.api.nvidia.com/v1',
+    nvidiaModel: 'meta/llama-3.1-70b-instruct',
+  };
+  const blob = await encryptAiPlaintext(JSON.stringify(legacy), PASSWORD);
+  const restored = await decryptAiSecrets(blob, PASSWORD);
+  expect(restored).toEqual({
+    aiProvider: 'gemini',
+    geminiKey: GEMINI,
+    geminiModel: 'gemini-2.0-flash',
+  } satisfies AiSecrets);
+  expect(JSON.stringify(restored)).not.toContain(NVIDIA);
+  expect(restored).not.toHaveProperty('nvidiaKey');
 });
 
 test('con el cifrado apagado no se suben claves ni bloque cifrado', async () => {
   const payload = await buildDriveSnapshot(snapshot({
     geminiKey: GEMINI,
-    nvidiaKey: NVIDIA,
     syncEncryptedAiKeys: false,
+    googleAccessToken: 'ya29.tampoco',
   }), PASSWORD);
   const encoded = JSON.stringify(payload);
   expect(payload.aiSecretsMode).toBe('omitted');
@@ -81,6 +103,29 @@ test('con el cifrado apagado no se suben claves ni bloque cifrado', async () => 
   expect(encoded).not.toContain(GEMINI);
   expect(encoded).not.toContain(NVIDIA);
   expect(encoded).not.toContain(PASSWORD);
+  expect(encoded).not.toContain('ya29.tampoco');
+});
+
+test('el respaldo en claro omite la clave y el cifrado la incluye solo como bloque', async () => {
+  const plain = await buildExportSnapshot(snapshot({
+    geminiKey: GEMINI,
+    geminiModel: 'gemini-2.0-flash',
+    syncEncryptedAiKeys: false,
+  }), PASSWORD);
+  expect(JSON.stringify(plain)).not.toContain(GEMINI);
+  expect(plain.aiSecretsMode).toBe('omitted');
+
+  const locked = await buildExportSnapshot(snapshot({
+    aiProvider: 'gemini',
+    geminiKey: GEMINI,
+    geminiModel: 'gemini-2.5-pro',
+    syncEncryptedAiKeys: true,
+  }), PASSWORD);
+  expect(JSON.stringify(locked)).not.toContain(GEMINI);
+  expect(locked.aiSecretsMode).toBe('encrypted');
+  const restored = await decryptAiSecrets(locked.encryptedAi!, PASSWORD);
+  expect(restored.geminiKey).toBe(GEMINI);
+  expect(restored.geminiModel).toBe('gemini-2.5-pro');
 });
 
 test('sin contraseña no arma un archivo con claves en claro', async () => {

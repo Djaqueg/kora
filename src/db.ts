@@ -1,5 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { isBackup } from './lib/backup';
+import { adoptLegacyDriveToken } from './lib/drive-session';
+import { cleanSettings, settingsNeedRewrite } from './lib/settings';
 import { makeCover, hueFromString } from './lib/cover';
 import { defaultStreak, nextStreak } from './lib/dates';
 import { parseEpub } from './lib/epub';
@@ -111,7 +113,7 @@ export function ensureReady(): Promise<void> {
 }
 
 function asSettings(value: unknown): Settings {
-  return { ...defaultSettings, ...(value && typeof value === 'object' ? (value as Settings) : {}) };
+  return cleanSettings(value);
 }
 
 function asStreak(value: unknown): Streak {
@@ -131,13 +133,16 @@ export async function loadLibrary(): Promise<LibraryData> {
     db.get('kv', 'streak'),
     db.get('kv', 'tombstones'),
   ]);
+  adoptLegacyDriveToken(settings);
+  const cleaned = asSettings(settings);
+  if (settingsNeedRewrite(settings)) await saveSettings(cleaned);
   return {
     books: books.sort((a, b) => b.updatedAt - a.updatedAt),
     highlights,
     capsules: capsules.sort((a, b) => a.order - b.order),
     flashcards,
     quizzes,
-    settings: asSettings(settings),
+    settings: cleaned,
     streak: asStreak(streak),
     tombstones: Array.isArray(tombstones) ? (tombstones as Tombstone[]) : [],
   };
@@ -176,7 +181,7 @@ export async function saveBook(book: Book): Promise<void> {
 
 export async function saveSettings(settings: Settings): Promise<void> {
   const db = await open();
-  await db.put('kv', settings, 'settings');
+  await db.put('kv', cleanSettings(settings), 'settings');
 }
 
 const AI_SYNC_PASSWORD_KEY = 'aiSyncPassword';
@@ -461,7 +466,7 @@ async function replaceStores(snapshot: BackupFile): Promise<void> {
   for (const capsule of snapshot.capsules) await tx.objectStore('capsules').put(capsule);
   for (const card of snapshot.flashcards) await tx.objectStore('flashcards').put(card);
   for (const quiz of snapshot.quizzes) await tx.objectStore('quizzes').put(quiz);
-  await tx.objectStore('kv').put(snapshot.settings || defaultSettings, 'settings');
+  await tx.objectStore('kv').put(cleanSettings(snapshot.settings || defaultSettings), 'settings');
   await tx.objectStore('kv').put(snapshot.streak || defaultStreak(), 'streak');
   await tx.objectStore('kv').put(snapshot.tombstones || [], 'tombstones');
   await tx.objectStore('kv').put(true, 'seeded');
@@ -473,16 +478,13 @@ function keepsLocalAi(mode: BackupFile['aiSecretsMode']): boolean {
 }
 
 function withLocalAi(settings: Settings, local: Settings): Settings {
-  return {
+  return cleanSettings({
     ...settings,
     aiProvider: local.aiProvider,
     geminiKey: local.geminiKey,
     geminiModel: local.geminiModel,
-    nvidiaKey: local.nvidiaKey,
-    nvidiaBaseUrl: local.nvidiaBaseUrl,
-    nvidiaModel: local.nvidiaModel,
     syncEncryptedAiKeys: local.syncEncryptedAiKeys,
-  };
+  });
 }
 
 export async function importSnapshot(data: unknown, mode: 'merge' | 'replace'): Promise<void> {
@@ -525,14 +527,15 @@ export async function importSnapshot(data: unknown, mode: 'merge' | 'replace'): 
 }
 
 function stripEmptySecrets(incoming: Settings, local: Settings): Settings {
-  const next = { ...incoming };
-  if (!next.geminiKey) next.geminiKey = local.geminiKey;
-  if (!next.nvidiaKey) next.nvidiaKey = local.nvidiaKey;
-  if (!next.googleAccessToken) {
-    next.googleAccessToken = local.googleAccessToken;
-    next.googleTokenExpiry = local.googleTokenExpiry;
+  const next = cleanSettings(incoming);
+  if (!next.geminiKey) {
+    next.geminiKey = local.geminiKey;
+    next.geminiModel = local.geminiModel || next.geminiModel;
+    next.aiProvider = local.aiProvider;
   }
   if (!next.googleClientId) next.googleClientId = local.googleClientId;
+  next.googleAccessToken = '';
+  next.googleTokenExpiry = 0;
   return next;
 }
 

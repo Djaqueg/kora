@@ -11,7 +11,7 @@ Todo vive en el dispositivo. No hay servidor de Kora. La app se instala, funcion
 - **Lector.** Página blanca de libro, capitular, «Capítulo N» y «Página X». Al tocar la página se abre una hoja con audio, modo noche, capítulos, tamaño (A A A), desplazamiento continuo o paginado, y brillo. El texto se selecciona para subrayar en cuatro colores, anotar y convertir el pasaje en flashcard o idea clave. Temas Claro, Sepia y Oscuro.
 - **Voz.** El lector y el resumen de cápsulas usan la Web Speech API, con preferencia por voces en español, velocidad de 0,75× a 2×, pausa y salto de párrafo o capítulo.
 - **Síntesis de 15 min.** Cápsulas con título, idea, «En la práctica» y cita. El audio resumen las lee seguidas. Cada una vuelve al pasaje del libro.
-- **IA opcional.** Gemini o un endpoint compatible con OpenAI (NVIDIA Build, por defecto `https://integrate.api.nvidia.com/v1`). La clave se guarda en este navegador. Si lo activas, también puede viajar cifrada en `kora-sync.json`; la contraseña no sale del dispositivo.
+- **IA opcional.** Solo Gemini. La clave se guarda en este navegador, no se vuelve a mostrar entera y no sale en claro en el respaldo. Si lo activas, puede viajar cifrada en `kora-sync.json`; la contraseña no sale del dispositivo.
 - **Modo local.** Sin clave se pueden crear cápsulas y tarjetas a mano, o generar una síntesis extractiva a partir de los capítulos y los subrayados.
 - **Repaso.** Tarjetas vencidas con *Otra vez, Difícil, Bien y Fácil* (SM-2) y un mini-quiz.
 - **Drive y respaldo.** OAuth con Client ID propio, descarga de EPUB/PDF/TXT/MD, subida y bajada de `kora-sync.json`, y exportar o importar un JSON completo.
@@ -61,36 +61,33 @@ Kora no pide un backend. Tú creas el cliente OAuth y la app habla con Drive des
    - `http://localhost:5173`
    - `http://127.0.0.1:4173`
    - `https://<usuario>.github.io` si publicas en Pages
-4. En Kora, abre **Ajustes → Datos**, pega el Client ID y pulsa **Conectar cuenta Google**. Google muestra el selector de cuenta para que elijas la correcta.
-5. Acepta estos alcances: lectura de Drive (`drive.readonly`) y archivos que la app cree (`drive.file`).
+4. En Kora, abre **Ajustes → Datos**, pega el Client ID y pulsa **Conectar cuenta Google**. El selector de cuenta aparece la primera vez y cuando pulsas **Cambiar cuenta**.
+5. Acepta lectura de Drive (`drive.readonly`), archivos que la app cree (`drive.file`) y el correo (`openid email`) para recordar la cuenta.
 6. Elige la carpeta, o pega el ID que aparece en `https://drive.google.com/drive/folders/<ID>`.
 7. En **Importar libros desde Drive**, **Ver libros de la carpeta** lista `.epub`, `.pdf`, `.txt` y `.md`. Marca los que quieras y **Descargar seleccionados** los guarda en la biblioteca.
 8. En **Sincronizar**, **Subir a Drive** escribe progreso, subrayados, cápsulas, tarjetas, quiz, racha y ajustes de lectura en `kora-sync.json`. **Bajar de Drive** une ese archivo con lo que ya hay en el dispositivo. Si hay conflicto, gana la copia más reciente. Borrar un libro deja una marca para que la sincronización no lo restaure.
 9. Las claves de IA no se suben en claro. Con **Sincronizar claves de IA cifradas en Drive** activo, Kora deriva una clave con PBKDF2 y cifra con AES-GCM. En Drive solo va el bloque cifrado, la sal y el IV. La contraseña se queda en el navegador. En el otro dispositivo, activa el mismo control, escribe la misma contraseña y baja el archivo. Si la contraseña no coincide, los libros y el progreso igual se combinan.
 
-Si todavía no tienes Client ID, usa **Exportar respaldo** y sube el JSON a la carpeta a mano. En el otro dispositivo, **Combinar JSON**. Ese respaldo local sí incluye las claves de API en claro: no lo compartas.
+El token vive solo en la sesión de esta pestaña. Kora lo renueva solo al pulsar **Subir a Drive**, **Bajar de Drive** o **Ver libros de la carpeta**. Si no puede, muestra **Reconectar**.
 
-También puedes pegar un token de acceso OAuth que ya tengas. Caduca; cuando Drive responda 401, vuelve a conectar.
+Si todavía no tienes Client ID, usa **Exportar respaldo** y sube el JSON a la carpeta a mano. En el otro dispositivo, **Combinar JSON**. Ese respaldo no incluye la clave de Gemini en claro.
+
+También puedes pegar un token de acceso OAuth. Sin la cuenta recordada no se renueva solo; cuando caduque, vuelve a conectar.
 
 ## Gemini
 
 1. Crea una clave en [Google AI Studio](https://aistudio.google.com/apikey).
-2. En **Ajustes → IA** elige **Google Gemini**, pega la clave y el modelo (por defecto `gemini-2.0-flash`).
-3. En un libro, **Generar** y elige Gemini, para el libro entero o un capítulo.
+2. En **Ajustes → IA** pega la clave, elige el modelo (por defecto `gemini-2.0-flash`) y pulsa **Probar clave**.
+3. Restringe la clave en Google AI Studio o Cloud Console al referente HTTP `https://djaqueg.github.io/*`.
+4. En un libro, **Generar** y elige Gemini, para el libro entero o un capítulo.
 
-La petición va de tu navegador a `generativelanguage.googleapis.com`. Kora pide de 8 a 12 ideas clave, un resumen, flashcards y un mini-quiz, y solo acepta JSON. Las cápsulas y tarjetas creadas a mano no se sustituyen.
-
-## NVIDIA Build u otra API compatible
-
-1. Crea una clave en [NVIDIA Build](https://build.nvidia.com/).
-2. En Ajustes elige **NVIDIA Build**, pega la clave, la base (`https://integrate.api.nvidia.com/v1` u otro endpoint `/v1`) y el modelo, por ejemplo `meta/llama-3.1-70b-instruct`.
-3. Genera igual que con Gemini. Kora llama a `POST {base}/chat/completions` con `Authorization: Bearer`.
+La petición va de tu navegador a `generativelanguage.googleapis.com` con la cabecera `x-goog-api-key` (la clave no viaja en la URL). Kora pide de 8 a 12 ideas clave, un resumen, flashcards y un mini-quiz, y solo acepta JSON. Las cápsulas y tarjetas creadas a mano no se sustituyen.
 
 Sin red, o sin clave, usa **Modo local, sin API**. Ordena frases del libro, prioriza las que coinciden con tus subrayados y arma cápsulas, tarjetas de hueco y un quiz.
 
 ## Privacidad
 
-Libros, progreso, subrayados, cápsulas, tarjetas, racha, Client ID, claves de API y la contraseña de cifrado están en IndexedDB de ese navegador. La contraseña no se incluye en `kora-sync.json`. La voz la sintetiza el propio sistema. Gemini, NVIDIA y Google solo reciben datos cuando tú pulsas generar, conectar o sincronizar.
+Libros, progreso, subrayados, cápsulas, tarjetas, racha, Client ID y la contraseña de cifrado están en IndexedDB de ese navegador. La clave de Gemini también, pero el respaldo en claro no la incluye. El token de Drive solo vive en la memoria de la pestaña. La contraseña no se incluye en `kora-sync.json`. La voz la sintetiza el propio sistema. Gemini y Google solo reciben datos cuando tú pulsas generar, probar la clave, conectar o sincronizar.
 
 ## Tecnologías
 

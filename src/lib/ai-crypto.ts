@@ -1,4 +1,4 @@
-import type { AiSecrets, EncryptedAiBlob } from '../types';
+import type { AiProvider, AiSecrets, EncryptedAiBlob } from '../types';
 
 export const AI_PBKDF2_ITERATIONS = 600_000;
 
@@ -40,20 +40,31 @@ async function deriveKey(password: string, salt: Uint8Array, iterations: number)
   );
 }
 
-function isAiSecrets(value: unknown): value is AiSecrets {
-  if (!value || typeof value !== 'object') return false;
-  const record = value as Partial<AiSecrets>;
-  return (
-    (record.aiProvider === 'gemini' || record.aiProvider === 'nvidia' || record.aiProvider === 'none') &&
-    typeof record.geminiKey === 'string' &&
-    typeof record.geminiModel === 'string' &&
-    typeof record.nvidiaKey === 'string' &&
-    typeof record.nvidiaBaseUrl === 'string' &&
-    typeof record.nvidiaModel === 'string'
-  );
+export function normalizeAiSecrets(value: unknown): AiSecrets | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const provider = record.aiProvider;
+  if (provider !== 'gemini' && provider !== 'none' && provider !== 'nvidia') return null;
+  if (typeof record.geminiKey !== 'string') return null;
+  const geminiKey = record.geminiKey;
+  const geminiModel = typeof record.geminiModel === 'string' && record.geminiModel.trim()
+    ? record.geminiModel.trim()
+    : 'gemini-2.0-flash';
+  let aiProvider: AiProvider;
+  if (provider === 'none') aiProvider = 'none';
+  else aiProvider = geminiKey.trim() ? 'gemini' : 'none';
+  return { aiProvider, geminiKey, geminiModel };
 }
 
-export async function encryptAiSecrets(secrets: AiSecrets, password: string): Promise<EncryptedAiBlob> {
+function storedSecrets(secrets: AiSecrets): AiSecrets {
+  return normalizeAiSecrets(secrets) || {
+    aiProvider: secrets.geminiKey.trim() ? 'gemini' : 'none',
+    geminiKey: secrets.geminiKey,
+    geminiModel: secrets.geminiModel || 'gemini-2.0-flash',
+  };
+}
+
+export async function encryptAiPlaintext(plain: string, password: string): Promise<EncryptedAiBlob> {
   if (!password.trim()) throw new Error('Escribe una contraseña de cifrado para subir las claves de IA. No se envió nada a Drive.');
   const salt = globalThis.crypto.getRandomValues(new Uint8Array(16));
   const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
@@ -61,7 +72,7 @@ export async function encryptAiSecrets(secrets: AiSecrets, password: string): Pr
   const ciphertext = await subtle.encrypt(
     { name: 'AES-GCM', iv: asBuffer(iv) },
     key,
-    new TextEncoder().encode(JSON.stringify(secrets)),
+    new TextEncoder().encode(plain),
   );
   return {
     v: 1,
@@ -73,6 +84,10 @@ export async function encryptAiSecrets(secrets: AiSecrets, password: string): Pr
     iv: bytesToBase64(iv),
     ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
   };
+}
+
+export async function encryptAiSecrets(secrets: AiSecrets, password: string): Promise<EncryptedAiBlob> {
+  return encryptAiPlaintext(JSON.stringify(storedSecrets(secrets)), password);
 }
 
 function assertBlob(blob: EncryptedAiBlob): void {
@@ -105,8 +120,9 @@ export async function decryptAiSecrets(blob: EncryptedAiBlob, password: string):
       asBuffer(base64ToBytes(blob.ciphertext)),
     );
     const parsed = JSON.parse(new TextDecoder().decode(plain)) as unknown;
-    if (!isAiSecrets(parsed)) throw new Error(UNREADABLE_AI_BLOB);
-    return parsed;
+    const secrets = normalizeAiSecrets(parsed);
+    if (!secrets) throw new Error(UNREADABLE_AI_BLOB);
+    return secrets;
   } catch (reason) {
     if (reason instanceof Error && (reason.message === UNREADABLE_AI_BLOB || reason.message === WRONG_AI_PASSWORD)) throw reason;
     throw new Error(WRONG_AI_PASSWORD);
