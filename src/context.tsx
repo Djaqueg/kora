@@ -1,0 +1,470 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { generateWithAi } from './lib/ai';
+import { downloadJson, readJsonFile } from './lib/backup';
+import { todayKey } from './lib/dates';
+import { downloadSync, uploadSync } from './lib/drive';
+import { generateLocal } from './lib/extract';
+import { applySm2, type Grade } from './lib/sm2';
+import { useTts } from './tts';
+import {
+  chaptersOf,
+  deleteBook as deleteBookDb,
+  ensureReady,
+  exportSnapshot,
+  importBuffer,
+  importSnapshot,
+  loadLibrary,
+  recordActivity,
+  removeCapsule,
+  removeCard,
+  removeHighlight,
+  restoreStarters,
+  saveBook,
+  saveCapsule,
+  saveCard,
+  saveGenerated,
+  saveHighlight,
+  saveSettings,
+  saveStreak,
+} from './db';
+import type {
+  Book,
+  Capsule,
+  Chapter,
+  DraftCapsule,
+  DraftCard,
+  Flashcard,
+  Highlight,
+  HighlightColor,
+  QuizQuestion,
+  ReadingPosition,
+  Settings,
+  Streak,
+} from './types';
+
+interface Toast {
+  id: number;
+  text: string;
+}
+
+interface HighlightInput {
+  bookId: string;
+  chapterId: string;
+  text: string;
+  note: string;
+  color: HighlightColor;
+  start: number;
+  end: number;
+}
+
+interface KoraContextValue {
+  ready: boolean;
+  error: string;
+  books: Book[];
+  highlights: Highlight[];
+  capsules: Capsule[];
+  cards: Flashcard[];
+  quizzes: QuizQuestion[];
+  settings: Settings;
+  streak: Streak;
+  tts: ReturnType<typeof useTts>;
+  toasts: Toast[];
+  installEvent: BeforeInstallPromptEvent | null;
+  toast: (text: string) => void;
+  promptInstall: () => Promise<void>;
+  updateSettings: (patch: Partial<Settings>) => Promise<void>;
+  updateGoals: (patch: Partial<Pick<Streak, 'dailyGoalMinutes' | 'dailyCapsuleGoal'>>) => Promise<void>;
+  importFiles: (files: File[]) => Promise<void>;
+  importDriveBuffer: (fileName: string, data: ArrayBuffer, driveFileId: string) => Promise<void>;
+  removeBook: (bookId: string) => Promise<void>;
+  saveProgress: (bookId: string, position: ReadingPosition, progress: number) => Promise<void>;
+  addHighlight: (input: HighlightInput) => Promise<Highlight>;
+  updateHighlight: (highlight: Highlight) => Promise<void>;
+  deleteHighlight: (highlight: Highlight) => Promise<void>;
+  addCapsule: (bookId: string, draft: DraftCapsule) => Promise<void>;
+  updateCapsule: (capsule: Capsule) => Promise<void>;
+  deleteCapsule: (capsule: Capsule) => Promise<void>;
+  completeCapsule: (capsule: Capsule) => Promise<void>;
+  addCard: (bookId: string, draft: DraftCard) => Promise<Flashcard>;
+  updateCard: (card: Flashcard) => Promise<void>;
+  deleteCard: (card: Flashcard) => Promise<void>;
+  reviewCard: (card: Flashcard, grade: Grade) => Promise<void>;
+  generateForBook: (book: Book, chapters: Chapter[], engine: 'local' | 'gemini' | 'nvidia') => Promise<void>;
+  recordMinutes: (minutes: number) => Promise<void>;
+  exportBackup: () => Promise<void>;
+  importBackup: (file: File, mode: 'merge' | 'replace') => Promise<void>;
+  restoreExamples: () => Promise<void>;
+  pushSync: () => Promise<void>;
+  pullSync: () => Promise<void>;
+  loadChapters: (bookId: string) => Promise<Chapter[]>;
+}
+
+const KoraContext = createContext<KoraContextValue | null>(null);
+
+function overlap(a: { start: number; end: number }, b: { start: number; end: number }) {
+  const shared = Math.min(a.end, b.end) - Math.max(a.start, b.start);
+  const length = Math.max(a.end - a.start, 1);
+  return shared / length;
+}
+
+export function KoraProvider({ children }: { children: ReactNode }) {
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState('');
+  const [books, setBooks] = useState<Book[]>([]);
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [capsules, setCapsules] = useState<Capsule[]>([]);
+  const [cards, setCards] = useState<Flashcard[]>([]);
+  const [quizzes, setQuizzes] = useState<QuizQuestion[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [streak, setStreak] = useState<Streak | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const tts = useTts();
+  const streakRef = useRef<Streak | null>(null);
+  const booksRef = useRef<Book[]>([]);
+  const highlightsRef = useRef<Highlight[]>([]);
+  streakRef.current = streak;
+  booksRef.current = books;
+  highlightsRef.current = highlights;
+
+  const toast = useCallback((text: string) => {
+    const id = Date.now() + Math.random();
+    setToasts([{ id, text }]);
+    window.setTimeout(() => setToasts((list) => list.filter((item) => item.id !== id)), 3200);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    const data = await loadLibrary();
+    setBooks(data.books);
+    setHighlights(data.highlights);
+    setCapsules(data.capsules);
+    setCards(data.flashcards);
+    setQuizzes(data.quizzes);
+    setSettings(data.settings);
+    setStreak(data.streak);
+  }, []);
+
+  useEffect(() => {
+    ensureReady()
+      .then(refresh)
+      .then(() => setReady(true))
+      .catch((reason: unknown) => {
+        setError(reason instanceof Error ? reason.message : 'No se pudo abrir la biblioteca local.');
+        setReady(true);
+      });
+  }, [refresh]);
+
+  useEffect(() => {
+    const onPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallEvent(event as BeforeInstallPromptEvent);
+    };
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', onPrompt);
+  }, []);
+
+  const promptInstall = useCallback(async () => {
+    if (!installEvent) return;
+    await installEvent.prompt();
+    setInstallEvent(null);
+  }, [installEvent]);
+
+  const updateSettings = useCallback(async (patch: Partial<Settings>) => {
+    setSettings((current) => {
+      if (!current) return current;
+      const next = { ...current, ...patch };
+      void saveSettings(next);
+      return next;
+    });
+  }, []);
+
+  const updateGoals = useCallback(async (patch: Partial<Pick<Streak, 'dailyGoalMinutes' | 'dailyCapsuleGoal'>>) => {
+    const current = streakRef.current;
+    if (!current) return;
+    const next = { ...current, ...patch };
+    streakRef.current = next;
+    setStreak(next);
+    await saveStreak(next);
+  }, []);
+
+  const importFiles = useCallback(async (files: File[]) => {
+    let imported = 0;
+    for (const file of files) {
+      try {
+        const data = await file.arrayBuffer();
+        await importBuffer({ data, fileName: file.name, source: 'local' });
+        imported += 1;
+      } catch (reason) {
+        toast(reason instanceof Error ? reason.message : `No se pudo importar ${file.name}.`);
+      }
+    }
+    if (imported) {
+      await refresh();
+      toast(imported === 1 ? 'Libro importado.' : `${imported} libros importados.`);
+    }
+  }, [refresh, toast]);
+
+  const importDriveBuffer = useCallback(async (fileName: string, data: ArrayBuffer, driveFileId: string) => {
+    await importBuffer({ data, fileName, source: 'drive', driveFileId });
+    await refresh();
+  }, [refresh]);
+
+  const removeBook = useCallback(async (bookId: string) => {
+    await deleteBookDb(bookId);
+    await refresh();
+    toast('Libro eliminado de este dispositivo.');
+  }, [refresh, toast]);
+
+  const saveProgress = useCallback(async (bookId: string, position: ReadingPosition, progress: number) => {
+    const book = booksRef.current.find((item) => item.id === bookId);
+    if (!book) return;
+    const next = { ...book, lastPosition: position, progress, updatedAt: Date.now() };
+    booksRef.current = booksRef.current.map((item) => (item.id === bookId ? next : item));
+    setBooks(booksRef.current);
+    await saveBook(next);
+  }, []);
+
+  const addHighlight = useCallback(async (input: HighlightInput) => {
+    const now = Date.now();
+    const existing = highlightsRef.current.find((item) => item.chapterId === input.chapterId && overlap(item, input) > 0.8);
+    const highlight: Highlight = existing
+      ? { ...existing, ...input, id: existing.id, createdAt: existing.createdAt, updatedAt: now }
+      : { ...input, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
+    await saveHighlight(highlight);
+    setHighlights((list) => existing ? list.map((item) => (item.id === highlight.id ? highlight : item)) : [...list, highlight]);
+    highlightsRef.current = existing
+      ? highlightsRef.current.map((item) => (item.id === highlight.id ? highlight : item))
+      : [...highlightsRef.current, highlight];
+    return highlight;
+  }, []);
+
+  const updateHighlight = useCallback(async (highlight: Highlight) => {
+    const next = { ...highlight, updatedAt: Date.now() };
+    await saveHighlight(next);
+    setHighlights((list) => list.map((item) => (item.id === next.id ? next : item)));
+  }, []);
+
+  const deleteHighlight = useCallback(async (highlight: Highlight) => {
+    await removeHighlight(highlight);
+    setHighlights((list) => list.filter((item) => item.id !== highlight.id));
+    toast('Subrayado eliminado.');
+  }, [toast]);
+
+  const addCapsule = useCallback(async (bookId: string, draft: DraftCapsule) => {
+    const now = Date.now();
+    const order = capsules.filter((item) => item.bookId === bookId).reduce((max, item) => Math.max(max, item.order), -1) + 1;
+    const capsule: Capsule = {
+      id: crypto.randomUUID(),
+      bookId,
+      chapterId: draft.chapterId,
+      title: draft.title,
+      idea: draft.idea,
+      practice: draft.practice,
+      quote: draft.quote,
+      highlightId: draft.highlightId,
+      order,
+      source: 'manual',
+      createdAt: now,
+      updatedAt: now,
+    };
+    await saveCapsule(capsule);
+    setCapsules((list) => [...list, capsule]);
+    toast('Idea clave creada.');
+  }, [capsules, toast]);
+
+  const updateCapsule = useCallback(async (capsule: Capsule) => {
+    const next = { ...capsule, updatedAt: Date.now() };
+    await saveCapsule(next);
+    setCapsules((list) => list.map((item) => (item.id === next.id ? next : item)));
+  }, []);
+
+  const deleteCapsule = useCallback(async (capsule: Capsule) => {
+    await removeCapsule(capsule);
+    setCapsules((list) => list.filter((item) => item.id !== capsule.id));
+  }, []);
+
+  const completeCapsule = useCallback(async (capsule: Capsule) => {
+    const current = streakRef.current;
+    if (!current) return;
+    const today = todayKey();
+    if (capsule.completedAt && todayKey(new Date(capsule.completedAt)) === today) {
+      toast('Esta idea ya cuenta para la meta de hoy.');
+      return;
+    }
+    const next = { ...capsule, completedAt: Date.now(), updatedAt: Date.now() };
+    await saveCapsule(next);
+    setCapsules((list) => list.map((item) => (item.id === next.id ? next : item)));
+    const streakNext = await recordActivity(current, 2, 1);
+    streakRef.current = streakNext;
+    setStreak(streakNext);
+    toast(streakNext.lastGoalDate === today ? 'Idea hecha. La meta de hoy avanza.' : 'Idea marcada.');
+  }, [toast]);
+
+  const addCard = useCallback(async (bookId: string, draft: DraftCard) => {
+    const now = Date.now();
+    const card = {
+      id: crypto.randomUUID(),
+      bookId,
+      chapterId: draft.chapterId,
+      front: draft.front,
+      back: draft.back,
+      highlightId: draft.highlightId,
+      source: 'manual' as const,
+      ease: 2.5,
+      interval: 0,
+      repetitions: 0,
+      due: now,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await saveCard(card);
+    setCards((list) => [...list, card]);
+    return card;
+  }, []);
+
+  const updateCard = useCallback(async (card: Flashcard) => {
+    const next = { ...card, updatedAt: Date.now() };
+    await saveCard(next);
+    setCards((list) => list.map((item) => (item.id === next.id ? next : item)));
+  }, []);
+
+  const deleteCard = useCallback(async (card: Flashcard) => {
+    await removeCard(card);
+    setCards((list) => list.filter((item) => item.id !== card.id));
+  }, []);
+
+  const reviewCard = useCallback(async (card: Flashcard, grade: Grade) => {
+    const next = applySm2(card, grade);
+    await saveCard(next);
+    setCards((list) => list.map((item) => (item.id === next.id ? next : item)));
+    const current = streakRef.current;
+    if (current) {
+      const streakNext = await recordActivity(current, 0.4, 0);
+      streakRef.current = streakNext;
+      setStreak(streakNext);
+    }
+  }, []);
+
+  const generateForBook = useCallback(async (book: Book, chapters: Chapter[], engine: 'local' | 'gemini' | 'nvidia') => {
+    if (!settings) throw new Error('Ajustes no disponibles.');
+    const related = highlightsRef.current.filter((item) => item.bookId === book.id && chapters.some((chapter) => chapter.id === item.chapterId));
+    const pack = engine === 'local'
+      ? generateLocal(chapters, related)
+      : await generateWithAi({ ...settings, aiProvider: engine }, book.title, book.author, chapters);
+    await saveGenerated(book, pack, engine === 'local' ? 'local' : 'ai');
+    await refresh();
+    toast(`Síntesis lista: ${pack.capsules.length} ideas, ${pack.flashcards.length} tarjetas y ${pack.quizzes.length} preguntas.`);
+  }, [refresh, settings, toast]);
+
+  const recordMinutes = useCallback(async (minutes: number) => {
+    const current = streakRef.current;
+    if (!current || minutes <= 0) return;
+    const next = await recordActivity(current, minutes, 0);
+    streakRef.current = next;
+    setStreak(next);
+  }, []);
+
+  const exportBackup = useCallback(async () => {
+    const snapshot = await exportSnapshot();
+    const date = todayKey();
+    downloadJson(`kora-respaldo-${date}.json`, snapshot);
+    toast('Respaldo descargado. También puedes subirlo a Drive a mano.');
+  }, [toast]);
+
+  const importBackup = useCallback(async (file: File, mode: 'merge' | 'replace') => {
+    const data = await readJsonFile(file);
+    await importSnapshot(data, mode);
+    await refresh();
+    toast(mode === 'replace' ? 'Respaldo restaurado.' : 'Respaldo combinado con lo que ya tenías.');
+  }, [refresh, toast]);
+
+  const restoreExamples = useCallback(async () => {
+    const added = await restoreStarters();
+    await refresh();
+    toast(added ? 'Libros de ejemplo restaurados.' : 'Los libros de ejemplo ya estaban en la biblioteca.');
+  }, [refresh, toast]);
+
+  const pushSync = useCallback(async () => {
+    if (!settings?.googleAccessToken || !settings.driveFolderId) throw new Error('Conecta Google y elige una carpeta.');
+    const snapshot = await exportSnapshot();
+    await uploadSync(settings.googleAccessToken, settings.driveFolderId, JSON.stringify(snapshot));
+    toast('kora-sync.json subido a la carpeta de Drive.');
+  }, [settings, toast]);
+
+  const pullSync = useCallback(async () => {
+    if (!settings?.googleAccessToken || !settings.driveFolderId) throw new Error('Conecta Google y elige una carpeta.');
+    const snapshot = await downloadSync(settings.googleAccessToken, settings.driveFolderId);
+    await importSnapshot(snapshot, 'merge');
+    await refresh();
+    toast('Sincronización bajada y combinada.');
+  }, [refresh, settings, toast]);
+
+  const value = useMemo<KoraContextValue | null>(() => {
+    if (!settings || !streak) return null;
+    return {
+      ready,
+      error,
+      books,
+      highlights,
+      capsules,
+      cards,
+      quizzes,
+      settings,
+      streak,
+      tts,
+      toasts,
+      installEvent,
+      toast,
+      promptInstall,
+      updateSettings,
+      updateGoals,
+      importFiles,
+      importDriveBuffer,
+      removeBook,
+      saveProgress,
+      addHighlight,
+      updateHighlight,
+      deleteHighlight,
+      addCapsule,
+      updateCapsule,
+      deleteCapsule,
+      completeCapsule,
+      addCard,
+      updateCard,
+      deleteCard,
+      reviewCard,
+      generateForBook,
+      recordMinutes,
+      exportBackup,
+      importBackup,
+      restoreExamples,
+      pushSync,
+      pullSync,
+      loadChapters: chaptersOf,
+    };
+  }, [
+    ready, error, books, highlights, capsules, cards, quizzes, settings, streak, tts, toasts, installEvent,
+    toast, promptInstall, updateSettings, updateGoals, importFiles, importDriveBuffer, removeBook, saveProgress,
+    addHighlight, updateHighlight, deleteHighlight, addCapsule, updateCapsule, deleteCapsule, completeCapsule,
+    addCard, updateCard, deleteCard, reviewCard, generateForBook, recordMinutes, exportBackup, importBackup,
+    restoreExamples, pushSync, pullSync,
+  ]);
+
+  if (!ready || !value) {
+    return (
+      <div className="splash">
+        <div className="logo-mark">K</div>
+        <h1>Kora</h1>
+        <p>{error || 'Abriendo tu biblioteca…'}</p>
+      </div>
+    );
+  }
+
+  return <KoraContext.Provider value={value}>{children}</KoraContext.Provider>;
+}
+
+export function useKora() {
+  const context = useContext(KoraContext);
+  if (!context) throw new Error('useKora fuera del proveedor');
+  return context;
+}

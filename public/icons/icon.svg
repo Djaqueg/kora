@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Kora">
+  <rect width="512" height="512" rx="108" fill="#0f6e66"/>
+  <rect x="36" y="36" width="440" height="440" rx="88" fill="none" stroke="#f4efe4" stroke-opacity="0.28" stroke-width="10"/>
+  <path d="M118 168c48-22 92-16 126 4v214c-36-18-82-16-126 8V168z" fill="#f7f3ea"/>
+  <path d="M394 168c-48-22-92-16-126 4v214c36-18 82-16 126 8V168z" fill="#fffaf3"/>
+  <path d="M244 172h24v214h-24z" fill="#0f6e66" opacity="0.9"/>
+  <path d="M150 230h70M150 262h58M150 294h64" stroke="#0f6e66" stroke-width="8" stroke-linecap="round" opacity="0.45"/>
+  <path d="M292 230h70M304 262h58M298 294h64" stroke="#c45c4a" stroke-width="8" stroke-linecap="round" opacity="0.55"/>
+  <circle cx="392" cy="132" r="34" fill="#e39b2b"/>
+  <path d="M392 112v40M372 132h40" stroke="#f7f3ea" stroke-width="8" stroke-linecap="round"/>
+</svg>
