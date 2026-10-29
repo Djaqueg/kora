@@ -1,14 +1,16 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { decryptAiSecrets } from '../src/lib/ai-crypto';
+import type { EncryptedAiBlob } from '../src/types';
 
 const shots = join(process.cwd(), 'test-results', 'ui');
 mkdirSync(shots, { recursive: true });
 
 const PASSWORD = 'Kora-Llave-9f3c';
 const GEMINI = 'AIzaSy-KORA-SECRETO-7391';
-const NVIDIA = 'nvapi-kora-secreto-4410';
-const MODEL = 'gemini-kora-sync-test';
+const MODEL = 'gemini-2.5-pro';
+const MASK = '••••7391';
 
 function extractSnapshot(body: string, contentType: string): string {
   if (contentType.includes('application/json') && body.trim().startsWith('{')) return body;
@@ -77,10 +79,8 @@ async function connectFakeDrive(page: Page) {
 
 async function setAiKeys(page: Page) {
   await page.getByRole('tab', { name: 'IA' }).click();
-  await page.getByRole('radio', { name: 'Google Gemini' }).check();
   await page.getByRole('textbox', { name: 'Clave de Gemini' }).fill(GEMINI);
-  await page.getByRole('textbox', { name: 'Modelo de Gemini' }).fill(MODEL);
-  await page.getByRole('textbox', { name: 'Clave de NVIDIA Build' }).fill(NVIDIA);
+  await page.getByRole('combobox', { name: 'Modelo de Gemini' }).selectOption(MODEL);
 }
 
 test.describe('sincronización cifrada', () => {
@@ -135,23 +135,27 @@ test.describe('sincronización cifrada', () => {
     await page.getByRole('button', { name: 'Exportar respaldo' }).click();
     const download = await downloadPromise;
     const backup = JSON.parse(readFileSync((await download.path())!, 'utf8')) as {
-      settings: { geminiKey?: string; nvidiaKey?: string };
-      encryptedAi?: unknown;
+      settings: { geminiKey?: string; googleAccessToken?: string };
+      encryptedAi?: EncryptedAiBlob;
       aiSecretsMode?: string;
     };
-    expect(backup.settings.geminiKey).toBe(GEMINI);
-    expect(backup.settings.nvidiaKey).toBe(NVIDIA);
-    expect(backup.encryptedAi).toBeUndefined();
-    expect(backup.aiSecretsMode).toBeUndefined();
+    expect(backup.settings.geminiKey).toBeUndefined();
+    expect(backup.settings.googleAccessToken).toBeUndefined();
+    expect(backup.aiSecretsMode).toBe('encrypted');
+    expect(backup.encryptedAi?.alg).toBe('AES-GCM');
+    expect(JSON.stringify(backup)).not.toContain(GEMINI);
     expect(JSON.stringify(backup)).not.toContain(PASSWORD);
+    const exported = await decryptAiSecrets(backup.encryptedAi!, PASSWORD);
+    expect(exported.geminiKey).toBe(GEMINI);
+    expect(exported.geminiModel).toBe(MODEL);
 
     await connectFakeDrive(page);
     await page.getByRole('button', { name: 'Subir a Drive' }).click();
     await expect(page.locator('.form-note', { hasText: /claves de IA van cifradas/i })).toBeVisible();
     const uploaded = drive.raw();
     expect(uploaded).not.toContain(GEMINI);
-    expect(uploaded).not.toContain(NVIDIA);
     expect(uploaded).not.toContain(PASSWORD);
+    expect(uploaded).not.toContain('ya29');
     expect(uploaded).not.toContain(MODEL);
     expect(drive.snapshot().aiSecretsMode).toBe('encrypted');
     expect(drive.snapshot().encryptedAi?.alg).toBe('AES-GCM');
@@ -162,10 +166,9 @@ test.describe('sincronización cifrada', () => {
     expect(drive.snapshot().settings.geminiKey).toBeUndefined();
 
     await page.getByRole('tab', { name: 'IA' }).click();
-    await page.getByRole('radio', { name: 'Solo local' }).check();
-    await page.getByRole('textbox', { name: 'Clave de Gemini' }).fill('');
-    await page.getByRole('textbox', { name: 'Modelo de Gemini' }).fill('modelo-solo-local');
-    await page.getByRole('textbox', { name: 'Clave de NVIDIA Build' }).fill('');
+    await page.getByRole('button', { name: 'Borrar clave' }).click();
+    await expect(page.getByRole('textbox', { name: 'Clave de Gemini' })).toHaveValue('');
+    await page.getByRole('combobox', { name: 'Modelo de Gemini' }).selectOption('gemini-3.8-flash');
     await page.getByRole('tab', { name: 'Lectura' }).click();
     await page.getByRole('button', { name: 'Oscuro' }).click();
     await page.getByRole('tab', { name: 'Datos' }).click();
@@ -178,18 +181,16 @@ test.describe('sincronización cifrada', () => {
     await expect(page.getByRole('button', { name: 'Sepia' })).toHaveClass(/on/);
     await page.getByRole('tab', { name: 'IA' }).click();
     await expect(page.getByRole('textbox', { name: 'Clave de Gemini' })).toHaveValue('');
-    await expect(page.getByRole('textbox', { name: 'Modelo de Gemini' })).toHaveValue('modelo-solo-local');
-    await expect(page.getByRole('radio', { name: 'Solo local' })).toBeChecked();
+    await expect(page.getByRole('combobox', { name: 'Modelo de Gemini' })).toHaveValue('gemini-3.8-flash');
 
     await page.getByRole('tab', { name: 'Datos' }).click();
     await page.getByRole('textbox', { name: 'Contraseña de cifrado' }).fill(PASSWORD);
     await page.getByRole('button', { name: 'Bajar de Drive' }).click();
     await expect(page.getByRole('status').filter({ hasText: /claves de IA se recuperaron/i })).toBeVisible();
     await page.getByRole('tab', { name: 'IA' }).click();
-    await expect(page.getByRole('textbox', { name: 'Clave de Gemini' })).toHaveValue(GEMINI);
-    await expect(page.getByRole('textbox', { name: 'Clave de NVIDIA Build' })).toHaveValue(NVIDIA);
-    await expect(page.getByRole('textbox', { name: 'Modelo de Gemini' })).toHaveValue(MODEL);
-    await expect(page.getByRole('radio', { name: 'Google Gemini' })).toBeChecked();
+    await expect(page.getByRole('textbox', { name: 'Clave de Gemini' })).toHaveValue(MASK);
+    await expect(page.getByRole('textbox', { name: 'Clave de Gemini' })).not.toHaveValue(GEMINI);
+    await expect(page.getByRole('combobox', { name: 'Modelo de Gemini' })).toHaveValue(MODEL);
     await page.getByRole('button', { name: 'Biblioteca' }).click();
     await expect(page.getByRole('button', { name: /Semillas de atención/ })).toBeVisible();
   });
@@ -209,10 +210,10 @@ test.describe('sincronización cifrada', () => {
     expect(drive.snapshot().aiSecretsMode).toBe('omitted');
     expect(drive.snapshot().encryptedAi).toBeUndefined();
     expect(drive.raw()).not.toContain(GEMINI);
-    expect(drive.raw()).not.toContain(NVIDIA);
+    expect(drive.raw()).not.toContain('ya29');
 
     await page.getByRole('tab', { name: 'IA' }).click();
-    await page.getByRole('textbox', { name: 'Clave de Gemini' }).fill('');
+    await page.getByRole('button', { name: 'Borrar clave' }).click();
     await page.getByRole('tab', { name: 'Lectura' }).click();
     await page.getByRole('button', { name: 'Oscuro' }).click();
     await page.getByRole('tab', { name: 'Datos' }).click();
@@ -264,13 +265,20 @@ test.describe('selector de cuenta y libros de Drive', () => {
           oauth2: {
             initTokenClient: (config) => ({
               requestAccessToken: (opts) => {
-                calls.push(opts?.prompt || '');
+                calls.push(opts?.prompt ?? '');
                 config.callback({ access_token: 'ya29.cuenta-elegida', expires_in: 3600 });
               },
             }),
           },
         },
       };
+    });
+    await page.route('https://www.googleapis.com/oauth2/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ email: 'lector@example.com' }),
+      });
     });
     await openData(page);
     await expect(page.getByTestId('sync-block')).toBeVisible();
@@ -284,6 +292,7 @@ test.describe('selector de cuenta y libros de Drive', () => {
     await expect(page.getByText('Cuenta conectada en este dispositivo.')).toBeVisible();
     await expect(page.getByText('Conectada', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Desconectar' })).toBeVisible();
+    await expect(page.getByText('Cuenta: lector@example.com')).toBeVisible();
     const prompts = await page.evaluate(() => (window as unknown as { __koraGisPrompts: string[] }).__koraGisPrompts);
     expect(prompts).toEqual(['select_account consent']);
   });

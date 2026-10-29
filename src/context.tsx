@@ -3,7 +3,8 @@ import { generateWithAi } from './lib/ai';
 import { downloadJson, readJsonFile } from './lib/backup';
 import { todayKey } from './lib/dates';
 import { decryptAiSecrets } from './lib/ai-crypto';
-import { buildDriveSnapshot } from './lib/drive-snapshot';
+import { buildDriveSnapshot, buildExportSnapshot } from './lib/drive-snapshot';
+import { cleanSettings } from './lib/settings';
 import { downloadSync, uploadSync } from './lib/drive';
 import { generateLocal } from './lib/extract';
 import { applySm2, type Grade } from './lib/sm2';
@@ -32,6 +33,7 @@ import {
 } from './db';
 import type {
   AiSecrets,
+  BackupFile,
   Book,
   Capsule,
   Chapter,
@@ -94,13 +96,13 @@ interface KoraContextValue {
   updateCard: (card: Flashcard) => Promise<void>;
   deleteCard: (card: Flashcard) => Promise<void>;
   reviewCard: (card: Flashcard, grade: Grade) => Promise<void>;
-  generateForBook: (book: Book, chapters: Chapter[], engine: 'local' | 'gemini' | 'nvidia') => Promise<void>;
+  generateForBook: (book: Book, chapters: Chapter[], engine: 'local' | 'gemini') => Promise<void>;
   recordMinutes: (minutes: number) => Promise<void>;
   exportBackup: () => Promise<void>;
   importBackup: (file: File, mode: 'merge' | 'replace') => Promise<void>;
   restoreExamples: () => Promise<void>;
-  pushSync: () => Promise<void>;
-  pullSync: () => Promise<void>;
+  pushSync: (accessToken: string) => Promise<void>;
+  pullSync: (accessToken: string) => Promise<void>;
   loadChapters: (bookId: string) => Promise<Chapter[]>;
 }
 
@@ -371,7 +373,7 @@ export function KoraProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const generateForBook = useCallback(async (book: Book, chapters: Chapter[], engine: 'local' | 'gemini' | 'nvidia') => {
+  const generateForBook = useCallback(async (book: Book, chapters: Chapter[], engine: 'local' | 'gemini') => {
     if (!settings) throw new Error('Ajustes no disponibles.');
     const related = highlightsRef.current.filter((item) => item.bookId === book.id && chapters.some((chapter) => chapter.id === item.chapterId));
     const pack = engine === 'local'
@@ -390,19 +392,51 @@ export function KoraProvider({ children }: { children: ReactNode }) {
     setStreak(next);
   }, []);
 
+  const applyAiSecrets = useCallback(async (secrets: AiSecrets) => {
+    const latest = await loadLibrary();
+    const next = cleanSettings({
+      ...latest.settings,
+      aiProvider: secrets.aiProvider,
+      geminiKey: secrets.geminiKey,
+      geminiModel: secrets.geminiModel,
+    });
+    settingsRef.current = next;
+    setSettings(next);
+    await saveSettings(next);
+  }, []);
+
   const exportBackup = useCallback(async () => {
     const snapshot = await exportSnapshot();
+    const password = snapshot.settings.syncEncryptedAiKeys ? await loadAiSyncPassword() : '';
+    const payload = await buildExportSnapshot(snapshot, password);
     const date = todayKey();
-    downloadJson(`kora-respaldo-${date}.json`, snapshot);
+    downloadJson(`kora-respaldo-${date}.json`, payload);
     toast('Respaldo descargado. También puedes subirlo a Drive a mano.');
   }, [toast]);
 
   const importBackup = useCallback(async (file: File, mode: 'merge' | 'replace') => {
     const data = await readJsonFile(file);
     await importSnapshot(data, mode);
+    let keyError = '';
+    if (data && typeof data === 'object' && (data as BackupFile).aiSecretsMode === 'encrypted' && (data as BackupFile).encryptedAi) {
+      const password = await loadAiSyncPassword();
+      if (!password.trim()) {
+        keyError = 'Falta la contraseña de cifrado. Libros, progreso y subrayados se importaron; la clave de Gemini no.';
+      } else {
+        try {
+          const secrets = await decryptAiSecrets((data as BackupFile).encryptedAi!, password);
+          await applyAiSecrets(secrets);
+        } catch (reason) {
+          keyError = reason instanceof Error
+            ? reason.message
+            : 'La contraseña no es correcta. La clave de Gemini no se recuperó; libros, progreso y subrayados sí se importaron.';
+        }
+      }
+    }
     await refresh();
+    if (keyError) throw new Error(keyError);
     toast(mode === 'replace' ? 'Respaldo restaurado.' : 'Respaldo combinado con lo que ya tenías.');
-  }, [refresh, toast]);
+  }, [applyAiSecrets, refresh, toast]);
 
   const restoreExamples = useCallback(async () => {
     const added = await restoreStarters();
@@ -410,22 +444,22 @@ export function KoraProvider({ children }: { children: ReactNode }) {
     toast(added ? 'Libros de ejemplo restaurados.' : 'Los libros de ejemplo ya estaban en la biblioteca.');
   }, [refresh, toast]);
 
-  const pushSync = useCallback(async () => {
+  const pushSync = useCallback(async (accessToken: string) => {
     const snapshot = await exportSnapshot();
-    const { googleAccessToken, driveFolderId, syncEncryptedAiKeys } = snapshot.settings;
-    if (!googleAccessToken || !driveFolderId) throw new Error('Conecta Google y elige una carpeta.');
+    const { driveFolderId, syncEncryptedAiKeys } = snapshot.settings;
+    if (!accessToken || !driveFolderId) throw new Error('Conecta Google y elige una carpeta.');
     const password = syncEncryptedAiKeys ? await loadAiSyncPassword() : '';
     const payload = await buildDriveSnapshot(snapshot, password);
-    await uploadSync(googleAccessToken, driveFolderId, JSON.stringify(payload));
+    await uploadSync(accessToken, driveFolderId, JSON.stringify(payload));
     toast(payload.aiSecretsMode === 'encrypted'
       ? 'kora-sync.json subido. Las claves de IA van cifradas.'
       : 'kora-sync.json subido a la carpeta de Drive.');
   }, [toast]);
 
-  const pullSync = useCallback(async () => {
+  const pullSync = useCallback(async (accessToken: string) => {
     const current = (await loadLibrary()).settings;
-    if (!current.googleAccessToken || !current.driveFolderId) throw new Error('Conecta Google y elige una carpeta.');
-    const snapshot = await downloadSync(current.googleAccessToken, current.driveFolderId);
+    if (!accessToken || !current.driveFolderId) throw new Error('Conecta Google y elige una carpeta.');
+    const snapshot = await downloadSync(accessToken, current.driveFolderId);
     const remoteHasCipher = snapshot.aiSecretsMode === 'encrypted' && Boolean(snapshot.encryptedAi);
     let secrets: AiSecrets | null = null;
     let keyError = '';
@@ -451,24 +485,11 @@ export function KoraProvider({ children }: { children: ReactNode }) {
       }
     }
     await importSnapshot(toImport, 'merge');
-    if (secrets) {
-      const latest = await loadLibrary();
-      const next = {
-        ...latest.settings,
-        aiProvider: secrets.aiProvider,
-        geminiKey: secrets.geminiKey,
-        geminiModel: secrets.geminiModel,
-        nvidiaKey: secrets.nvidiaKey,
-        nvidiaBaseUrl: secrets.nvidiaBaseUrl,
-        nvidiaModel: secrets.nvidiaModel,
-      };
-      settingsRef.current = next;
-      await saveSettings(next);
-    }
+    if (secrets) await applyAiSecrets(secrets);
     await refresh();
     if (keyError) throw new Error(keyError);
     toast(remoteHasCipher && secrets ? 'Sincronización bajada. Las claves de IA se recuperaron.' : 'Sincronización bajada y combinada.');
-  }, [refresh, toast]);
+  }, [applyAiSecrets, refresh, toast]);
 
   const value = useMemo<KoraContextValue | null>(() => {
     if (!settings || !streak) return null;

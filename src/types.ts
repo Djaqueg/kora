@@ -1,6 +1,6 @@
 export type BookFormat = 'EPUB' | 'PDF' | 'TXT' | 'MD';
 export type HighlightColor = 'yellow' | 'green' | 'blue' | 'rose';
-export type AiProvider = 'gemini' | 'nvidia' | 'none';
+export type AiProvider = 'gemini' | 'none';
 export type ContentSource = 'seed' | 'manual' | 'local' | 'ai';
 export type ReaderTheme = 'claro' | 'sepia' | 'oscuro';
 export type ReaderFont = 'newsreader' | 'playfair' | 'literata' | 'jakarta' | 'outfit' | 'serif';
@@ -111,9 +111,6 @@ export interface AiSecrets {
   aiProvider: AiProvider;
   geminiKey: string;
   geminiModel: string;
-  nvidiaKey: string;
-  nvidiaBaseUrl: string;
-  nvidiaModel: string;
 }
 
 export interface EncryptedAiBlob {
@@ -131,9 +128,6 @@ export interface Settings {
   aiProvider: AiProvider;
   geminiKey: string;
   geminiModel: string;
-  nvidiaKey: string;
-  nvidiaBaseUrl: string;
-  nvidiaModel: string;
   syncEncryptedAiKeys: boolean;
   googleClientId: string;
   googleAccessToken: string;
@@ -207,9 +201,6 @@ export const defaultSettings: Settings = {
   aiProvider: 'none',
   geminiKey: '',
   geminiModel: 'gemini-2.0-flash',
-  nvidiaKey: '',
-  nvidiaBaseUrl: 'https://integrate.api.nvidia.com/v1',
-  nvidiaModel: 'meta/llama-3.1-70b-instruct',
   syncEncryptedAiKeys: false,
   googleClientId: '',
   googleAccessToken: '',

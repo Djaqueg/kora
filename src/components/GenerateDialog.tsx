@@ -15,7 +15,7 @@ export function GenerateDialog({
   onClose: () => void;
 }) {
   const { settings, generateForBook, toast } = useKora();
-  const [engine, setEngine] = useState<'local' | 'gemini' | 'nvidia'>(settings.aiProvider === 'none' ? 'local' : settings.aiProvider);
+  const [engine, setEngine] = useState<'local' | 'gemini'>(settings.aiProvider === 'gemini' && settings.geminiKey.trim() ? 'gemini' : 'local');
   const [scope, setScope] = useState<'book' | 'chapter'>(initialChapterId ? 'chapter' : 'book');
   const [chapterId, setChapterId] = useState(initialChapterId || chapters[0]?.id || '');
   const [busy, setBusy] = useState(false);
@@ -28,7 +28,6 @@ export function GenerateDialog({
       const selected = scope === 'chapter' ? chapters.filter((chapter) => chapter.id === chapterId) : chapters;
       if (!selected.length) throw new Error('No hay capítulos para sintetizar.');
       if (engine === 'gemini' && !settings.geminiKey.trim()) throw new Error('Añade tu clave de Gemini en Ajustes.');
-      if (engine === 'nvidia' && !settings.nvidiaKey.trim()) throw new Error('Añade tu clave de NVIDIA Build en Ajustes.');
       await generateForBook(book, selected, engine);
       onClose();
     } catch (reason) {
@@ -48,8 +47,7 @@ export function GenerateDialog({
       <fieldset className="choice-set">
         <legend>Motor</legend>
         <label><input type="radio" name="engine" checked={engine === 'local'} onChange={() => setEngine('local')} /> Modo local, sin API</label>
-        <label><input type="radio" name="engine" checked={engine === 'gemini'} onChange={() => setEngine('gemini')} /> Google Gemini {settings.geminiKey ? '' : '(sin clave)'}</label>
-        <label><input type="radio" name="engine" checked={engine === 'nvidia'} onChange={() => setEngine('nvidia')} /> NVIDIA Build {settings.nvidiaKey ? '' : '(sin clave)'}</label>
+        <label><input type="radio" name="engine" checked={engine === 'gemini'} onChange={() => setEngine('gemini')} /> Gemini {settings.geminiKey ? '' : '(sin clave)'}</label>
       </fieldset>
       <fieldset className="choice-set">
         <legend>Alcance</legend>

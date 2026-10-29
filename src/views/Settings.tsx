@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { DrivePanel } from '../components/DrivePanel';
+import { GeminiSettings } from '../components/GeminiSettings';
 import { BrightnessSlider, ScrollSwitch, TextSizePicker } from '../components/TypeControls';
 import { useKora } from '../context';
 
@@ -155,7 +156,7 @@ export function Settings({ section }: { section?: string }) {
 
         <section className="setting-card">
           <h2>Respaldo</h2>
-          <p className="muted">El JSON incluye libros, progreso, subrayados, cápsulas, tarjetas, racha y las claves guardadas. No lo compartas en público.</p>
+          <p className="muted">El JSON incluye libros, progreso, subrayados, cápsulas, tarjetas, racha y los ajustes de lectura. La clave de Gemini no va en claro; si el cifrado está activo, viaja solo como bloque cifrado.</p>
           <div className="row-actions">
             <button className="btn" type="button" onClick={() => void exportBackup()}>Exportar respaldo</button>
             <label className="btn secondary file-btn">
@@ -184,31 +185,7 @@ export function Settings({ section }: { section?: string }) {
       </div>
 
       <div id="settings-panel-ia" role="tabpanel" aria-labelledby="settings-tab-ia" hidden={tab !== 'ia'}>
-        <section className="setting-card" id="ia">
-          <h2>Inteligencia artificial</h2>
-          <p className="muted">Las claves se guardan en este navegador y las peticiones salen directo a Gemini o a tu endpoint. Para llevarlas a otro dispositivo, actívalo en Datos: se cifran y la contraseña no se sube. Sin clave, el modo local sigue disponible.</p>
-          <fieldset className="choice-set">
-            <legend>Proveedor preferido</legend>
-            <label><input type="radio" name="provider" checked={settings.aiProvider === 'none'} onChange={() => void updateSettings({ aiProvider: 'none' })} /> Solo local</label>
-            <label><input type="radio" name="provider" checked={settings.aiProvider === 'gemini'} onChange={() => void updateSettings({ aiProvider: 'gemini' })} /> Google Gemini</label>
-            <label><input type="radio" name="provider" checked={settings.aiProvider === 'nvidia'} onChange={() => void updateSettings({ aiProvider: 'nvidia' })} /> NVIDIA Build / API compatible con OpenAI</label>
-          </fieldset>
-          <label className="field">Clave de Gemini
-            <input type="password" value={settings.geminiKey} autoComplete="off" onChange={(event) => void updateSettings({ geminiKey: event.target.value.trim() })} placeholder="AIza…" />
-          </label>
-          <label className="field">Modelo de Gemini
-            <input value={settings.geminiModel} onChange={(event) => void updateSettings({ geminiModel: event.target.value.trim() })} placeholder="gemini-2.0-flash" />
-          </label>
-          <label className="field">Clave de NVIDIA Build
-            <input type="password" value={settings.nvidiaKey} autoComplete="off" onChange={(event) => void updateSettings({ nvidiaKey: event.target.value.trim() })} placeholder="nvapi-…" />
-          </label>
-          <label className="field">Base URL
-            <input value={settings.nvidiaBaseUrl} onChange={(event) => void updateSettings({ nvidiaBaseUrl: event.target.value.trim() })} placeholder="https://integrate.api.nvidia.com/v1" />
-          </label>
-          <label className="field">Modelo
-            <input value={settings.nvidiaModel} onChange={(event) => void updateSettings({ nvidiaModel: event.target.value.trim() })} placeholder="meta/llama-3.1-70b-instruct" />
-          </label>
-        </section>
+        <GeminiSettings />
       </div>
 
       <div id="settings-panel-app" role="tabpanel" aria-labelledby="settings-tab-app" hidden={tab !== 'app'}>

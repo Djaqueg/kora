@@ -121,82 +121,79 @@ export function packFromModel(raw: string, chapters: Chapter[]): GeneratedPack {
   };
 }
 
-async function readError(response: Response): Promise<string> {
+function redact(message: string, secret: string): string {
+  const trimmed = secret.trim();
+  if (!trimmed || !message.includes(trimmed)) return message;
+  return message.split(trimmed).join('••••');
+}
+
+async function readError(response: Response, secret = ''): Promise<string> {
   try {
     const data = (await response.json()) as { error?: { message?: string } | string; message?: string };
-    if (typeof data.error === 'string') return data.error;
-    return data.error?.message || data.message || `Error ${response.status}`;
+    const raw = typeof data.error === 'string' ? data.error : data.error?.message || data.message || `Error ${response.status}`;
+    return redact(raw, secret);
   } catch {
     return `Error ${response.status}`;
   }
 }
 
+function geminiUrl(model: string, action: 'generateContent' | ''): string {
+  const path = action ? `:${action}` : '';
+  return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}${path}`;
+}
+
+function geminiHeaders(key: string, json = true): HeadersInit {
+  const headers: Record<string, string> = { 'x-goog-api-key': key };
+  if (json) headers['Content-Type'] = 'application/json';
+  return headers;
+}
+
 async function gemini(settings: Settings, prompt: string): Promise<string> {
   const model = settings.geminiModel.trim() || 'gemini-2.0-flash';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(settings.geminiKey.trim())}`;
+  const key = settings.geminiKey.trim();
+  const url = geminiUrl(model, 'generateContent');
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.4, responseMimeType: 'application/json' },
   };
   let response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: geminiHeaders(key),
     body: JSON.stringify(body),
   });
   if (response.status === 400) {
     response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: geminiHeaders(key),
       body: JSON.stringify({ contents: body.contents, generationConfig: { temperature: 0.4 } }),
     });
   }
-  if (!response.ok) throw new Error(await readError(response));
+  if (!response.ok) throw new Error(await readError(response, key));
   const data = (await response.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
     error?: { message?: string };
   };
-  if (data.error?.message) throw new Error(data.error.message);
+  if (data.error?.message) throw new Error(redact(data.error.message, key));
   const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('\n') || '';
   if (!text.trim()) throw new Error('Gemini no devolvió texto.');
   return text;
 }
 
-async function nvidia(settings: Settings, prompt: string): Promise<string> {
-  const base = (settings.nvidiaBaseUrl.trim() || 'https://integrate.api.nvidia.com/v1').replace(/\/$/, '');
-  const response = await fetch(`${base}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${settings.nvidiaKey.trim()}`,
-    },
-    body: JSON.stringify({
-      model: settings.nvidiaModel.trim() || 'meta/llama-3.1-70b-instruct',
-      temperature: 0.4,
-      stream: false,
-      messages: [
-        { role: 'system', content: 'Respondes solo con un objeto JSON válido, en español, sin markdown.' },
-        { role: 'user', content: prompt },
-      ],
-    }),
-  });
-  if (!response.ok) throw new Error(await readError(response));
-  const data = (await response.json()) as { choices?: { message?: { content?: string } }[]; error?: { message?: string } };
-  if (data.error?.message) throw new Error(data.error.message);
-  const text = data.choices?.[0]?.message?.content || '';
-  if (!text.trim()) throw new Error('El modelo no devolvió texto.');
-  return text;
+export async function testGeminiKey(key: string, model: string): Promise<void> {
+  const trimmed = key.trim();
+  const chosen = model.trim() || 'gemini-2.0-flash';
+  if (!trimmed) throw new Error('Añade tu clave de Gemini.');
+  const response = await fetch(geminiUrl(chosen, ''), { headers: geminiHeaders(trimmed, false) });
+  if (response.status === 404) throw new Error('Ese modelo de Gemini no está disponible.');
+  if (response.status === 400 || response.status === 401 || response.status === 403) {
+    throw new Error('La clave de Gemini no funciona. Revisa que sea válida.');
+  }
+  if (!response.ok) throw new Error('No se pudo probar la clave de Gemini.');
 }
 
 export async function generateWithAi(settings: Settings, title: string, author: string, chapters: Chapter[]): Promise<GeneratedPack> {
   if (!navigator.onLine) throw new Error('Sin conexión. Puedes generar la síntesis en local.');
+  if (!settings.geminiKey.trim()) throw new Error('Falta la clave de Gemini en Ajustes.');
   const prompt = promptFor(title, author, chapters);
-  if (settings.aiProvider === 'gemini') {
-    if (!settings.geminiKey.trim()) throw new Error('Falta la clave de Gemini en Ajustes.');
-    return packFromModel(await gemini(settings, prompt), chapters);
-  }
-  if (settings.aiProvider === 'nvidia') {
-    if (!settings.nvidiaKey.trim()) throw new Error('Falta la clave de NVIDIA Build en Ajustes.');
-    return packFromModel(await nvidia(settings, prompt), chapters);
-  }
-  throw new Error('Elige un proveedor de IA en Ajustes o usa el modo local.');
+  return packFromModel(await gemini(settings, prompt), chapters);
 }
