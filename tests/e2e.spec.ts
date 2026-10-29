@@ -194,11 +194,14 @@ test.describe('escritorio', () => {
 
     await page.getByRole('button', { name: 'Ajustes' }).click();
     await expect(page.getByTestId('settings-view')).toBeVisible();
+    await page.getByRole('tab', { name: 'IA' }).click();
     await expect(page.getByText('Google Gemini')).toBeVisible();
     await expect(page.getByText('NVIDIA Build / API compatible con OpenAI')).toBeVisible();
+    await page.getByRole('tab', { name: 'Datos' }).click();
     await expect(page.getByText(/Client ID de Google/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Exportar respaldo' })).toBeVisible();
     await expect(page.getByText(/orígenes autorizados/i)).toBeVisible();
+    await page.getByRole('tab', { name: 'Lectura' }).click();
     await page.getByRole('button', { name: 'Sepia' }).click();
   });
 
@@ -251,7 +254,8 @@ test.describe('móvil', () => {
     await expect(page.getByText('Idea 2 de')).toBeVisible();
     await page.getByTestId('bottom-nav').getByRole('button', { name: 'Ajustes' }).click();
     await expect(page.getByRole('heading', { name: 'Kora en este dispositivo' })).toBeVisible();
-    await expect(page.locator('input[value="gemini-2.0-flash"]')).toHaveCount(1);
+    await page.getByRole('tab', { name: 'IA' }).click();
+    await expect(page.locator('input[value="gemini-2.0-flash"]')).toBeVisible();
     await page.getByTestId('bottom-nav').getByRole('button', { name: 'Repaso' }).click();
     await expect(page.getByTestId('review-view')).toBeVisible();
     await page.screenshot({ path: join(shots, 'mobile-review.png') });

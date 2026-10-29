@@ -656,6 +656,45 @@ code { font-family: ui-monospace, monospace; font-size: 0.92em; }
   font-weight: 700;
 }
 .theme-picks button.on, .segmented button.on { background: var(--ink); color: white; }
+
+.settings-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 0 0 18px;
+  padding: 0 2px 6px;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--slate-mid) transparent;
+}
+.settings-tabs::-webkit-scrollbar { height: 6px; }
+.settings-tabs::-webkit-scrollbar-thumb {
+  background: var(--slate-mid);
+  border-radius: 999px;
+}
+.settings-tab {
+  flex: 0 0 auto;
+  border: 0;
+  background: var(--slate-soft);
+  color: var(--muted);
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  border-radius: 999px;
+  padding: 10px 18px;
+  white-space: nowrap;
+}
+.settings-tab[aria-selected="true"] {
+  background: var(--ink);
+  color: white;
+}
 @media (min-width: 960px) {
   .sheet-overlay { left: var(--sidebar); }
   .app-read .main { padding: 28px 24px 28px; }
