@@ -186,7 +186,7 @@ export function Settings({ section }: { section?: string }) {
       <div id="settings-panel-ia" role="tabpanel" aria-labelledby="settings-tab-ia" hidden={tab !== 'ia'}>
         <section className="setting-card" id="ia">
           <h2>Inteligencia artificial</h2>
-          <p className="muted">Las claves se guardan solo en este navegador y las peticiones salen directo a Gemini o a tu endpoint. Sin clave, el modo local sigue disponible.</p>
+          <p className="muted">Las claves se guardan en este navegador y las peticiones salen directo a Gemini o a tu endpoint. Para llevarlas a otro dispositivo, actívalo en Datos: se cifran y la contraseña no se sube. Sin clave, el modo local sigue disponible.</p>
           <fieldset className="choice-set">
             <legend>Proveedor preferido</legend>
             <label><input type="radio" name="provider" checked={settings.aiProvider === 'none'} onChange={() => void updateSettings({ aiProvider: 'none' })} /> Solo local</label>

@@ -107,6 +107,26 @@ export interface Streak {
   date: string;
 }
 
+export interface AiSecrets {
+  aiProvider: AiProvider;
+  geminiKey: string;
+  geminiModel: string;
+  nvidiaKey: string;
+  nvidiaBaseUrl: string;
+  nvidiaModel: string;
+}
+
+export interface EncryptedAiBlob {
+  v: 1;
+  alg: 'AES-GCM';
+  kdf: 'PBKDF2';
+  hash: 'SHA-256';
+  iterations: number;
+  salt: string;
+  iv: string;
+  ciphertext: string;
+}
+
 export interface Settings {
   aiProvider: AiProvider;
   geminiKey: string;
@@ -114,6 +134,7 @@ export interface Settings {
   nvidiaKey: string;
   nvidiaBaseUrl: string;
   nvidiaModel: string;
+  syncEncryptedAiKeys: boolean;
   googleClientId: string;
   googleAccessToken: string;
   googleTokenExpiry: number;
@@ -148,6 +169,8 @@ export interface BackupFile {
   streak: Streak;
   settings: Settings;
   tombstones: Tombstone[];
+  aiSecretsMode?: 'plain' | 'omitted' | 'encrypted';
+  encryptedAi?: EncryptedAiBlob;
 }
 
 export interface DraftCapsule {
@@ -187,6 +210,7 @@ export const defaultSettings: Settings = {
   nvidiaKey: '',
   nvidiaBaseUrl: 'https://integrate.api.nvidia.com/v1',
   nvidiaModel: 'meta/llama-3.1-70b-instruct',
+  syncEncryptedAiKeys: false,
   googleClientId: '',
   googleAccessToken: '',
   googleTokenExpiry: 0,

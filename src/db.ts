@@ -38,7 +38,7 @@ interface KoraSchema extends DBSchema {
   flashcards: { key: string; value: Flashcard; indexes: { byBook: string } };
   quizzes: { key: string; value: QuizQuestion; indexes: { byBook: string } };
   files: { key: string; value: StoredFile };
-  kv: { key: string; value: Settings | Streak | Tombstone[] | boolean };
+  kv: { key: string; value: Settings | Streak | Tombstone[] | boolean | string };
 }
 
 export interface LibraryData {
@@ -177,6 +177,21 @@ export async function saveBook(book: Book): Promise<void> {
 export async function saveSettings(settings: Settings): Promise<void> {
   const db = await open();
   await db.put('kv', settings, 'settings');
+}
+
+const AI_SYNC_PASSWORD_KEY = 'aiSyncPassword';
+
+export async function loadAiSyncPassword(): Promise<string> {
+  await ensureReady();
+  const db = await open();
+  const value = await db.get('kv', AI_SYNC_PASSWORD_KEY);
+  return typeof value === 'string' ? value : '';
+}
+
+export async function saveAiSyncPassword(password: string): Promise<void> {
+  await ensureReady();
+  const db = await open();
+  await db.put('kv', password, AI_SYNC_PASSWORD_KEY);
 }
 
 export async function saveStreak(streak: Streak): Promise<void> {
@@ -453,14 +468,34 @@ async function replaceStores(snapshot: BackupFile): Promise<void> {
   await tx.done;
 }
 
+function keepsLocalAi(mode: BackupFile['aiSecretsMode']): boolean {
+  return mode === 'omitted' || mode === 'encrypted';
+}
+
+function withLocalAi(settings: Settings, local: Settings): Settings {
+  return {
+    ...settings,
+    aiProvider: local.aiProvider,
+    geminiKey: local.geminiKey,
+    geminiModel: local.geminiModel,
+    nvidiaKey: local.nvidiaKey,
+    nvidiaBaseUrl: local.nvidiaBaseUrl,
+    nvidiaModel: local.nvidiaModel,
+    syncEncryptedAiKeys: local.syncEncryptedAiKeys,
+  };
+}
+
 export async function importSnapshot(data: unknown, mode: 'merge' | 'replace'): Promise<void> {
   if (!isBackup(data)) throw new Error('Ese archivo no es un respaldo de Kora.');
+  const local = await loadLibrary();
   if (mode === 'replace') {
-    await replaceStores(data);
+    const settings = keepsLocalAi(data.aiSecretsMode)
+      ? withLocalAi({ ...defaultSettings, ...data.settings }, local.settings)
+      : data.settings || defaultSettings;
+    await replaceStores({ ...data, settings });
     return;
   }
   const db = await open();
-  const local = await loadLibrary();
   const chapters = await db.getAll('chapters');
   const tombs = latestTombs(local.tombstones, data.tombstones || []);
   const deadBooks = new Set(tombs.filter((tomb) => tomb.kind === 'book').map((tomb) => tomb.id));
@@ -470,7 +505,10 @@ export async function importSnapshot(data: unknown, mode: 'merge' | 'replace'): 
   const capsules = alive(mergeById(local.capsules, data.capsules), 'capsule', tombs).filter((item) => books.some((book) => book.id === item.bookId));
   const flashcards = alive(mergeById(local.flashcards, data.flashcards), 'flashcard', tombs).filter((item) => books.some((book) => book.id === item.bookId));
   const quizzes = alive(mergeById(local.quizzes, data.quizzes), 'quiz', tombs).filter((item) => books.some((book) => book.id === item.bookId));
-  const settings = data.exportedAt > Date.now() - 1000 * 60 * 60 * 24 * 365 * 20 ? { ...local.settings, ...stripEmptySecrets(data.settings, local.settings) } : local.settings;
+  const merged = data.exportedAt > Date.now() - 1000 * 60 * 60 * 24 * 365 * 20
+    ? { ...local.settings, ...stripEmptySecrets(data.settings, local.settings) }
+    : local.settings;
+  const settings = keepsLocalAi(data.aiSecretsMode) ? withLocalAi(merged, local.settings) : merged;
   const streak = pickStreak(local.streak, data.streak);
   await replaceStores({
     ...data,
